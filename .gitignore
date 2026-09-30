@@ -1,0 +1,31 @@
+# Node portátil (baixado pelo "Iniciar Sistema.bat" / ferramentas\instalar-node.ps1)
+node/
+
+# Banco de dados com dados REAIS dos residentes — NUNCA versionar (LGPD: dados de saúde)
+dados/
+*.db
+*.db-wal
+*.db-shm
+*.cifrado
+
+# Planilhas, fotos e documentos que alguém copie para dentro do projeto
+*.csv
+*.xlsx
+*.xls
+*.docx
+*.pdf
+entrada/
+fotos/
+
+# Fotos do teste automático (são da demonstração fictícia, mas não precisam ir para o GitHub)
+ferramentas/prints/
+
+# Cópias de segurança do banco (contêm os mesmos dados reais) e restaurações em andamento
+backups/
+RESTAURAR.*
+antes-da-restauracao-*
+
+# Sistema
+Thumbs.db
+desktop.ini
+~$*

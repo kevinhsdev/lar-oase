@@ -1,0 +1,25 @@
+OASE - Lar (sistema do lar de idosos da OASE) — como usar
+======================================
+
+ABRIR
+  Dê dois cliques em "Iniciar Sistema.bat". Abre uma janela preta (é o sistema funcionando: NÃO feche enquanto usa)
+  e o navegador em http://localhost:3000. Na primeira vez ele baixa o Node.js sozinho (precisa de internet só nessa vez).
+
+PRIMEIRO ACESSO
+  Usuário: kevin     Senha: trocar123
+  O sistema pede para criar uma senha sua (mínimo 8 caracteres). Depois, em Configurações › Usuários,
+  crie uma conta para cada pessoa (a senha inicial delas também é trocar123).
+
+TESTAR SEM DADOS REAIS
+  Configurações › Geral › "Carregar demonstração". Para limpar: "Apagar demonstração".
+
+CÓPIAS DE SEGURANÇA
+  Configurações › Cópias de segurança: aponte a pasta para um pen drive ou para o OneDrive e defina uma senha.
+  O sistema copia sozinho a cada 6 horas. Faça um teste de restauração: backup que nunca foi restaurado não é backup.
+
+USAR NO CELULAR OU EM OUTRO COMPUTADOR
+  Configurações › Celular e rede › "Liberar para o celular". O sistema reinicia e mostra um QR Code.
+  Com o celular no MESMO Wi-Fi, aponte a câmera e entre com usuário e senha. Só na rede interna, nunca no Wi-Fi de visitantes.
+
+FECHAR
+  Feche a janela preta (ou aperte Ctrl+C nela).

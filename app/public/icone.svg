@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Símbolo da OASE (torre, cruz e globo) sobre azulejo branco — mesmo desenho do MARCA_SVG em app.js.
+       Depois de mexer aqui, rode: node ferramentas/gerar-icone.mjs (gera o icone.ico do atalho). -->
+  <rect width="64" height="64" rx="14" fill="#ffffff"/>
+  <g transform="translate(9.9 5) scale(0.4426)">
+    <path d="M50 5 C47 40 29 88 5 101 C30 103 45 108 50 117 C55 108 70 103 95 101 C71 88 53 40 50 5 Z" fill="#ffffff" stroke="#8e1b2f" stroke-width="6" stroke-linejoin="round"/>
+    <ellipse cx="50" cy="88" rx="22" ry="10" fill="#e8c9ce" stroke="#8e1b2f" stroke-width="6"/>
+    <!-- contorno branco por baixo (paint-order): separa a cruz das linhas da torre quando o ícone é pequeno -->
+    <g fill="#8e1b2f" stroke="#ffffff" stroke-width="5" paint-order="stroke">
+      <rect x="45.5" y="38" width="9" height="58"/>
+      <rect x="37" y="49" width="26" height="9"/>
+    </g>
+    <rect x="45.5" y="38" width="9" height="58" fill="#8e1b2f"/>
+  </g>
+</svg>

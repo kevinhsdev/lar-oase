@@ -1,0 +1,7 @@
+# Arquivos do Windows precisam de fim de linha CRLF (o "goto" do .bat falha sem ele), em qualquer PC que baixar o projeto
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+# Binários: nunca mexer
+*.png binary
+*.ico binary
+*.woff2 binary

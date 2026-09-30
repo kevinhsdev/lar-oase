@@ -265,10 +265,12 @@ escondido). Usa banco temporário e porta 3998, testa as regras da API (senha, C
 edição, demonstração, cópia), abre todas as telas (computador, celular 390 px e modo escuro), faz as interações principais
 (cadastrar, familiar, situação, ajuda, busca, bloqueio) e tira fotos em `ferramentas\prints`. **0.6.0: 158 ok, 0 falhas.**
 
-**Para enviar ao GitHub pela primeira vez** (sem dados reais — o `.gitignore` já protege): criar um repositório **privado**
-(ex.: `kevinhsdev/lar-oase`) e, na pasta do projeto: `git init`, `git add .`, **conferir o `git status`** (não pode aparecer
-`dados/`, `.db`, planilhas), `git commit -m "LAR 0.2.0: base e Residentes"`, `git branch -M main`, `git remote add origin <endereço>`
-e `git push -u origin main`. O botão de Atualizações só funciona depois disso.
+**GitHub:** repositório **privado** `https://github.com/kevinhsdev/lar-oase` (criado em 30/09/2026, ramo `main`, primeiro envio = 0.6.0).
+O botão Configurações › Atualizações busca as versões novas dele. Para mandar uma entrega nova (só quando o Kevin pedir):
+`git status` (**conferir**: não pode aparecer `dados/`, `.db`, planilhas, fotos), `git add -A`, `git commit` (mensagem em português) e `git push`.
+O `.gitattributes` garante CRLF no `.bat`/`.ps1`. Não há GitHub CLI (`gh`) no PC do Kevin: o repositório foi criado pela API do
+GitHub usando o login que o Git Credential Manager já guardava. Para instalar o sistema no PC do Lar: `git clone` desse endereço
+(pede o login do GitHub uma vez) e depois o atalho (`ferramentas\criar-atalho.ps1`).
 
 ### Armadilhas
 - **Barra de baixo do celular:** com mais de 5 grupos, ela mostra os 4 primeiros e um botão **"Mais"** com o resto

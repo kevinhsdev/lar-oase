@@ -23,7 +23,7 @@ function itemCompromisso(a, { mostrarResidente = true, mostrarData = false } = {
   const t = TIPOS_AG[a.tipo] || TIPOS_AG.outro;
   return `<button type="button" class="compromisso ${a.situacao !== 'agendado' ? a.situacao : ''}" data-tipo="${esc(a.tipo)}" data-comp="${a.id}"
       title="${esc(`${t.nome}: ${a.titulo}${a.situacao !== 'agendado' ? ' (' + SIT_AG[a.situacao].toLowerCase() + ')' : ''}`)}">
-    <span class="ch">${mostrarData ? esc(nomeDia(a.data)) + ' · ' : ''}${esc(horarioAg(a))} · ${esc(t.nome)}</span><span class="ct">${esc(a.titulo)}</span>
+    <span class="ch">${mostrarData ? esc(nomeDia(a.data)) + ' · ' : ''}${esc(horarioAg(a))} · ${esc(t.nome)}${a.serie ? ' · ↻' : ''}</span><span class="ct">${esc(a.titulo)}</span>
     ${mostrarResidente ? `<span class="cq">${a.residente_id ? `${avatar(a.residente_nome || '?', 'p')}<span>${esc(a.residente_apelido || a.residente_nome || '')}</span>` : `${icone('pessoaCasa')}<span>Todo o lar</span>`}</span>` : ''}
     ${a.local ? `<span class="cq">${icone('local')}<span>${esc(a.local)}</span></span>` : ''}
   </button>`;
@@ -120,6 +120,7 @@ function abrirCompromisso(a) {
       ${ddRes('Marcado por', `${nomeAutorDia({ autor_nome: a.autor_nome, criado_por: a.criado_por })} em ${dataHoraBR(a.criado_em)}`)}</dl>`, {
     rascunho: false,
     rodape: `${podeApagar ? `<button type="button" class="btn fantasma esq" id="cpApagar">${icone('lixo')}Apagar</button>` : ''}
+      ${a.serie && a.situacao === 'agendado' ? `<button type="button" class="btn fantasma" id="cpSerie" title="Desmarca este e todos os próximos desta repetição">${icone('atualizar')}Parar a repetição</button>` : ''}
       ${a.situacao === 'agendado' ? `<button type="button" class="btn" id="cpCancelar">Desmarcar</button><button type="button" class="btn" id="cpEditar">${icone('editar')}Editar</button>
         <button type="button" class="btn primario" id="cpFeito">${icone('check')}Foi feito</button>`
         : `<button type="button" class="btn" id="cpReabrir">${icone('restaurar')}Voltar para agendado</button><button type="button" class="btn" id="cpEditar">${icone('editar')}Editar</button>`}`,
@@ -129,6 +130,10 @@ function abrirCompromisso(a) {
   const mudar = async (situacao, resultado) => { await api('PUT', `/api/agenda/${a.id}/situacao`, { situacao, resultado }); j.fechar(true); rotear(); };
   if ($('#cpFeito', j.el)) $('#cpFeito', j.el).onclick = () => { j.fechar(true); janelaFeitoAg(a, 'feito'); };
   if ($('#cpCancelar', j.el)) $('#cpCancelar', j.el).onclick = () => { j.fechar(true); janelaFeitoAg(a, 'cancelado'); };
+  if ($('#cpSerie', j.el)) $('#cpSerie', j.el).onclick = async () => {
+    if (!(await confirmar(`Desmarcar "${a.titulo}" deste dia em diante (todas as próximas vezes)? Os que já aconteceram continuam no histórico.`, 'Parar a repetição', { perigo: true, titulo: 'Parar a repetição?' }))) return;
+    try { const r = await api('POST', `/api/agenda/${a.id}/serie`, { motivo: 'Repetição encerrada' }); j.fechar(true); toast(`${plural(r.vezes, 'compromisso desmarcado', 'compromissos desmarcados')}.`); rotear(); } catch (e) { toast(e.message, true); }
+  };
   if ($('#cpReabrir', j.el)) $('#cpReabrir', j.el).onclick = (e) => botaoOcupado(e.currentTarget, async () => { await mudar('agendado'); toast('Voltou para agendado.'); });
   if ($('#cpApagar', j.el)) $('#cpApagar', j.el).onclick = async () => {
     if (!(await confirmar('Apagar este compromisso de vez? Se ele só foi desmarcado, prefira “Desmarcar”: fica no histórico.', 'Apagar', { perigo: true, titulo: 'Apagar compromisso?' }))) return;
@@ -176,6 +181,9 @@ async function formCompromisso(a, pre = {}) {
       <label class="campo"><span>Quem acompanha</span><input id="aAcomp" maxlength="80" placeholder="Ex.: Cuidadora Ana / a filha"></label>
       <label class="campo"><span>Transporte</span><input id="aTransp" maxlength="60" list="aTransportes"></label>
       <label class="campo largo"><span>Observações</span><textarea id="aObs" maxlength="2000" placeholder="Levar exames, jejum, documentos, cartão do convênio…"></textarea></label>
+      ${novo ? `<label class="campo"><span>Repetir</span><select id="aRepetir"><option value="">Não repete</option><option value="semanal">Toda semana</option>
+          <option value="quinzenal">A cada 2 semanas</option><option value="mensal">Todo mês</option><option value="diaria">Todo dia</option></select></label>
+        <label class="campo" id="aAteCaixa" hidden><span class="obrig">Repetir até</span><input type="date" id="aAte"><span class="dica">No máximo 1 ano.</span></label>` : ''}
     </div>${datalist('aTransportes', TRANSPORTES_AG)}`, {
     tamanho: 'largo',
     rodape: `<button type="button" class="btn" data-fechar>Cancelar</button><button type="button" class="btn primario" id="aSalvar">${icone('check')}${novo ? 'Agendar' : 'Salvar'}</button>`,
@@ -190,6 +198,11 @@ async function formCompromisso(a, pre = {}) {
       };
       el.addEventListener('change', (e) => { if (e.target.name === 'aTipo') sugerir(); });
       sugerir();
+      if ($('#aRepetir', el)) $('#aRepetir', el).addEventListener('change', () => {
+        const rep = $('#aRepetir', el).value;
+        $('#aAteCaixa', el).hidden = !rep;
+        if (rep && !$('#aAte', el).value) $('#aAte', el).value = somarDiasIso($('#aData', el).value || hojeIso(), rep === 'diaria' ? 30 : rep === 'mensal' ? 180 : 90);
+      });
     },
   });
   $('#aSalvar', j.el).onclick = (e) => botaoOcupado(e.currentTarget, async () => {
@@ -204,10 +217,13 @@ async function formCompromisso(a, pre = {}) {
     if (!corpo.data) throw new Error('Escolha o dia.');
     if (corpo.hora_fim && !corpo.hora) throw new Error('Informe a hora de início.');
     if (corpo.hora && corpo.hora_fim && corpo.hora_fim <= corpo.hora) throw new Error('A hora de fim precisa ser depois da de início.');
-    if (novo) await api('POST', '/api/agenda', corpo);
-    else await salvarComVersao(`/api/agenda/${a.id}`, corpo, { ...a, residente_id: a.residente_id ?? '' });
+    let vezes = 1;
+    if (novo) {
+      if ($('#aRepetir', j.el).value) { corpo.repetir = $('#aRepetir', j.el).value; corpo.repetir_ate = $('#aAte', j.el).value; if (!corpo.repetir_ate) throw new Error('Até quando repetir?'); }
+      vezes = (await api('POST', '/api/agenda', corpo)).vezes;
+    } else await salvarComVersao(`/api/agenda/${a.id}`, corpo, { ...a, residente_id: a.residente_id ?? '' });
     j.fechar(true);
-    toast(novo ? `Agendado para ${nomeDia(corpo.data).toLowerCase()}.` : 'Compromisso salvo.');
+    toast(novo ? (vezes > 1 ? `Agendado ${vezes} vezes, a partir de ${nomeDia(corpo.data).toLowerCase()}.` : `Agendado para ${nomeDia(corpo.data).toLowerCase()}.`) : 'Compromisso salvo.');
     if (/^#\/(agenda|residente\/|inicio)/.test(location.hash)) rotear(); else location.hash = '#/agenda/' + corpo.data;
   });
 }

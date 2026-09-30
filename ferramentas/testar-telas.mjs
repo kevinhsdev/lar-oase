@@ -27,6 +27,9 @@ const TELAS = [
   ['#/residentes/hospitalizado', 'residentes-hospitalizados'],
   ['#/residentes/historico', 'residentes-historico'],
   ['#/residente/{id}', 'ficha'],
+  ['#/prontuario/{id}', 'prontuario'],
+  ['#/pia', 'pia'],
+  ['#/pia/residente-{id}', 'pia-residente'],
   ['#/diario', 'diario'],
   ['#/diario/{ontem}', 'diario-ontem'],
   ['#/diario/atencao', 'diario-atencao'],
@@ -35,11 +38,27 @@ const TELAS = [
   ['#/medicacao/{ontem}', 'remedios-ontem'],
   ['#/prescricoes', 'prescricoes'],
   ['#/prescricoes/residente-{id}', 'prescricoes-residente'],
+  ['#/sinais', 'sinais-ronda'],
+  ['#/sinais/residente-{id}', 'sinais-graficos'],
+  ['#/avaliacoes', 'avaliacoes'],
+  ['#/avaliacoes/residente-{id}', 'avaliacoes-residente'],
+  ['#/vacinas', 'vacinas'],
+  ['#/vacinas/avisos', 'vacinas-avisos'],
+  ['#/vacinas/residente-{id}', 'vacinas-cartao'],
   ['#/agenda', 'agenda'],
   ['#/agenda/residente-{id}', 'agenda-residente'],
+  ['#/tarefas', 'tarefas'],
+  ['#/tarefas/minhas', 'tarefas-minhas'],
   ['#/estoque', 'estoque'],
   ['#/estoque/avisos', 'estoque-avisos'],
   ['#/estoque/item-{prod}', 'estoque-item'],
+  ['#/patrimonio', 'patrimonio'],
+  ['#/patrimonio/avisos', 'patrimonio-avisos'],
+  ['#/escala', 'escala'],
+  ['#/profissionais', 'profissionais'],
+  ['#/financeiro', 'financeiro'],
+  ['#/lancamentos', 'financeiro-contas'],
+  ['#/mensalidades', 'financeiro-mensalidades'],
   ['#/config/geral', 'config-geral'],
   ['#/config/usuarios', 'config-usuarios'],
   ['#/config/backups', 'config-backups'],
@@ -211,6 +230,64 @@ async function principal() {
   cookie = meuCookie;
   conferir((await api('PUT', `/api/agenda/${ag.dados.id}/situacao`, { situacao: 'feito', resultado: 'Retorno em 30 dias' })).status === 200, 'agenda: marca como feito com resultado');
   conferir((await api('GET', `/api/agenda?residente=${idTeste}&proximos=1`)).dados.itens.length === 0, 'agenda: feito sai dos próximos');
+  // Agenda que se repete
+  const ate4 = new Date(Date.now() + 28 * 86400000).toLocaleDateString('sv-SE');
+  conferir((await api('POST', '/api/agenda', { data: amanhaT, tipo: 'atividade', titulo: 'Culto', repetir: 'semanal', repetir_ate: '2000-01-01' })).status === 400, 'agenda: repetição com "até" antes do início é recusada');
+  const serieAg = await api('POST', '/api/agenda', { data: amanhaT, hora: '15:00', tipo: 'atividade', titulo: 'Culto da semana (teste)', repetir: 'semanal', repetir_ate: ate4 });
+  conferir(serieAg.status === 201 && serieAg.dados.vezes >= 4, `agenda: "toda semana" cria ${serieAg.dados.vezes} compromissos`);
+  const parar = await api('POST', `/api/agenda/${serieAg.dados.id}/serie`, {});
+  conferir(parar.status === 200 && parar.dados.vezes === serieAg.dados.vezes, 'agenda: "parar a repetição" desmarca todos os próximos');
+
+  // Avaliações (Katz, Braden, Morse)
+  const katzTudo1 = { banho: 1, vestir: 1, banheiro: 1, transferencia: 1, continencia: 1, alimentacao: 1 };
+  conferir((await api('POST', '/api/avaliacoes', { residente_id: idTeste, escala: 'katz', respostas: { banho: 1 } })).status === 400, 'avaliações: faltando resposta é recusado');
+  conferir((await api('POST', '/api/avaliacoes', { residente_id: idTeste, escala: 'katz', respostas: { ...katzTudo1, banho: 7 } })).status === 400, 'avaliações: resposta inventada é recusada');
+  const katz = await api('POST', '/api/avaliacoes', { residente_id: idTeste, escala: 'katz', respostas: katzTudo1 });
+  conferir(katz.status === 201 && katz.dados.pontuacao === 6 && katz.dados.classificacao === 'Independente', 'avaliações: Katz 6 = independente');
+  const brad = await api('POST', '/api/avaliacoes', { residente_id: idTeste, escala: 'braden', respostas: { percepcao: 2, umidade: 2, atividade: 1, mobilidade: 2, nutricao: 2, friccao: 1 } });
+  conferir(brad.dados.pontuacao === 10 && brad.dados.classificacao === 'Risco alto', 'avaliações: Braden 10 = risco alto de ferida');
+  const mor = await api('POST', '/api/avaliacoes', { residente_id: idTeste, escala: 'morse', respostas: { quedas: 25, diagnosticos: 15, apoio: 15, soro: 0, marcha: 10, mental: 0 } });
+  conferir(mor.dados.pontuacao === 65 && mor.dados.classificacao === 'Risco alto', 'avaliações: Morse 65 = risco alto de queda');
+  cookie = cookieMaria;
+  conferir((await api('DELETE', `/api/avaliacoes/${katz.dados.id}`)).status === 403, 'avaliações: equipe não apaga avaliação de outra pessoa');
+  cookie = meuCookie;
+
+  // Financeiro (só a administração)
+  cookie = cookieMaria;
+  conferir((await api('GET', '/api/financeiro/resumo')).status === 403 && (await api('GET', '/api/lancamentos')).status === 403, 'financeiro: a equipe não vê o financeiro');
+  cookie = meuCookie;
+  const hojeF = new Date().toLocaleDateString('sv-SE');
+  conferir((await api('POST', '/api/lancamentos', { tipo: 'despesa', categoria: 'Alimentação', descricao: 'X', valor: '0', vencimento: hojeF })).status === 400, 'financeiro: valor zero é recusado');
+  const luz = await api('POST', '/api/lancamentos', { tipo: 'despesa', categoria: 'Água, luz, gás e telefone', descricao: 'Luz (teste)', valor: '1.234,56', vencimento: hojeF, repetir_meses: 3 });
+  conferir(luz.status === 201 && luz.dados.ids.length === 3, 'financeiro: conta fixa repetida por 3 meses');
+  const doa = await api('POST', '/api/lancamentos', { tipo: 'receita', categoria: 'Doação', descricao: 'Doação (teste)', valor: '500', vencimento: hojeF, pessoa: 'Doador' });
+  await api('PUT', `/api/lancamentos/${doa.dados.ids[0]}/pagar`, { forma: 'Pix' });
+  const lcs = (await api('GET', `/api/lancamentos?mes=${hojeF.slice(0, 7)}`)).dados.itens;
+  conferir(lcs.find((x) => x.id === luz.dados.ids[0]).valor === 1234.56 && lcs.find((x) => x.id === doa.dados.ids[0]).situacao === 'pago', 'financeiro: valor com vírgula e recebimento registrado');
+  await api('PUT', `/api/mensalidades/residente/${idTeste}`, { mensalidade: '3.000,00', dia_vencimento: 10 });
+  const ger = await api('POST', '/api/mensalidades/gerar', { mes: hojeF.slice(0, 7) });
+  const ger2 = await api('POST', '/api/mensalidades/gerar', { mes: hojeF.slice(0, 7) });
+  conferir(ger.dados.geradas === 1 && ger2.dados.geradas === 0, 'financeiro: gera a mensalidade do mês uma vez só');
+
+  // PIA
+  const piaT = (await api('GET', `/api/pia?residente=${idTeste}`)).dados;
+  conferir(!piaT.atual && /Filho Dois/.test(piaT.sugestao.social.situacao) && piaT.sugestao.saude.situacao.length > 10, 'PIA: a sugestão traz os dados da pessoa (familiares, saúde)');
+  conferir((await api('POST', '/api/pia', { residente_id: idTeste, areas: { saude: { situacao: 'x' } } })).status === 400, 'PIA: sem metas nem cuidados é recusado');
+  const pia1 = await api('POST', '/api/pia', { residente_id: idTeste, participantes: 'Equipe', areas: { saude: { situacao: 'Hipertensa', metas: 'Pressão controlada', acoes: 'Aferir toda manhã', responsavel: 'Enfermagem' } } });
+  const pia2 = await api('POST', '/api/pia', { residente_id: idTeste, areas: { saude: { metas: 'Pressão controlada', acoes: 'Aferir 2x por dia' } } });
+  const piaV = (await api('GET', `/api/pia?residente=${idTeste}`)).dados;
+  conferir(pia1.status === 201 && pia2.status === 201 && piaV.versoes.length === 2 && piaV.atual.areas.saude.acoes === 'Aferir 2x por dia', 'PIA: cada revisão vira uma versão nova (a última vale)');
+
+  // Tarefas
+  conferir((await api('POST', '/api/tarefas', { titulo: '' })).status === 400, 'tarefas: sem título é recusada');
+  conferir((await api('POST', '/api/tarefas', { titulo: 'X', repetir: 'semanal' })).status === 400, 'tarefas: repetir sem prazo é recusado');
+  const tf = await api('POST', '/api/tarefas', { titulo: 'Trocar roupa de cama (teste)', prazo: new Date().toLocaleDateString('sv-SE'), repetir: 'semanal' });
+  const feitaTf = await api('PUT', `/api/tarefas/${tf.dados.id}/feita`, { feita: true });
+  conferir(feitaTf.status === 200 && feitaTf.dados.proxima, 'tarefas: marcar feita cria a próxima (repetição)');
+  cookie = cookieMaria;
+  conferir((await api('DELETE', `/api/tarefas/${tf.dados.id}`)).status === 403, 'tarefas: equipe não apaga tarefa de outra pessoa');
+  cookie = meuCookie;
+
   // Estoque
   conferir((await api('POST', '/api/produtos', { nome: '', categoria: 'higiene' })).status === 400, 'estoque: item sem nome é recusado');
   conferir((await api('POST', '/api/produtos', { nome: 'X', categoria: 'inventada' })).status === 400, 'estoque: categoria inventada é recusada');
@@ -264,6 +341,73 @@ async function principal() {
   conferir((await api('PUT', `/api/prescricoes/${pr1.dados.id}/suspender`, {})).status === 400, 'remédios: suspender pede o motivo');
   conferir((await api('PUT', `/api/prescricoes/${pr1.dados.id}/suspender`, { motivo: 'Médico suspendeu' })).status === 200
     && !(await api('GET', `/api/prescricoes?residente=${idTeste}`)).dados.itens.some((x) => x.id === pr1.dados.id), 'remédios: suspensa sai da lista de remédios em uso');
+  // Remédios dando baixa no estoque
+  const prodRx = await api('POST', '/api/produtos', { nome: 'Comprimido de teste', categoria: 'remedio', unidade: 'un', quantidade_inicial: '2' });
+  const rxEst = await api('POST', '/api/prescricoes', { ...rx, medicamento: 'Comprimido de teste 5 mg', produto_id: prodRx.dados.id, qtd_por_dose: '1' });
+  const darEst = await api('POST', '/api/medicacao', { prescricao_id: rxEst.dados.id, horario: agoraHM, situacao: 'dado' });
+  const saldoRx = async () => (await api('GET', `/api/produtos/${prodRx.dados.id}`)).dados.produto.saldo;
+  conferir(darEst.status === 201 && darEst.dados.baixa && (await saldoRx()) === 1, 'remédios: "Dei" dá baixa no estoque sozinho');
+  await api('DELETE', `/api/medicacao/${darEst.dados.id}`);
+  conferir((await saldoRx()) === 2, 'remédios: desfazer a marcação devolve ao estoque');
+
+  // Vacinas
+  const hojeV = new Date().toLocaleDateString('sv-SE');
+  conferir((await api('POST', '/api/vacinas', { residente_id: idTeste, vacina: '', data: hojeV })).status === 400, 'vacinas: sem vacina é recusado');
+  conferir((await api('POST', '/api/vacinas', { residente_id: idTeste, vacina: 'Covid-19', data: '2999-01-01' })).status === 400, 'vacinas: data no futuro é recusada');
+  const dtVelha = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 11); return d.toLocaleDateString('sv-SE'); })();
+  const vac1 = await api('POST', '/api/vacinas', { residente_id: idTeste, vacina: 'Dupla adulto dT (difteria e tétano)', dose: 'Reforço', data: dtVelha });
+  const cartaoT = (await api('GET', `/api/vacinas?residente=${idTeste}`)).dados;
+  conferir(vac1.status === 201 && cartaoT.situacao['Dupla adulto dT (difteria e tétano)'].estado === 'atrasada', 'vacinas: dT com mais de 10 anos aparece atrasada');
+  const camp = await api('POST', '/api/vacinas', { residentes: [idTeste], vacina: 'Influenza (gripe)', dose: 'Dose anual', data: hojeV, local: 'No lar — campanha' });
+  conferir(camp.status === 201 && camp.dados.ids.length === 1, 'vacinas: campanha registra para vários de uma vez');
+  cookie = cookieMaria;
+  const apagaVac = await api('DELETE', `/api/vacinas/${vac1.dados.ids[0]}`);
+  conferir(apagaVac.status === 403, `vacinas: equipe não apaga registro de outra pessoa${apagaVac.status === 403 ? '' : ` (veio ${apagaVac.status}: ${apagaVac.dados.erro || ''})`}`);
+  cookie = meuCookie;
+  // Equipe
+  cookie = cookieMaria;
+  conferir((await api('POST', '/api/profissionais', { nome: 'X', funcao: 'Cuidador(a)' })).status === 403, 'equipe: só a administração cadastra profissional');
+  cookie = meuCookie;
+  conferir((await api('POST', '/api/profissionais', { nome: '', funcao: 'Cuidador(a)' })).status === 400, 'equipe: profissional sem nome é recusado');
+  const prof = await api('POST', '/api/profissionais', { nome: 'Cuidadora de Teste', funcao: 'Cuidador(a)', vinculo: 'Funcionário' });
+  const med = await api('POST', '/api/profissionais', { nome: 'Dr. Teste', funcao: 'Médico(a)', vinculo: 'Prestador de serviço', registro: 'CRM 0' });
+  conferir(prof.status === 201 && med.status === 201, 'equipe: cadastra profissionais');
+  const hojeE = new Date().toLocaleDateString('sv-SE');
+  conferir((await api('PUT', '/api/escala', { profissional_id: prof.dados.id, data: hojeE, codigo: 'XX' })).status === 400, 'equipe: código de escala inventado é recusado');
+  const fimE = new Date(Date.now() + 9 * 86400000).toLocaleDateString('sv-SE');
+  const padr = await api('POST', '/api/escala/padrao', { profissional_id: prof.dados.id, padrao: '12x36_dia', inicio: hojeE, fim: fimE });
+  const hojeEsc = (await api('GET', '/api/escala/hoje')).dados.itens;
+  conferir(padr.dados.dias === 10 && hojeEsc.some((i) => i.nome === 'Cuidadora de Teste' && i.codigo === 'D'), 'equipe: padrão 12x36 preenche e aparece "no plantão hoje"');
+  const escMes = (await api('GET', `/api/escala?mes=${hojeE.slice(0, 7)}`)).dados;
+  conferir(escMes.pessoas.some((p) => p.id === prof.dados.id) && !escMes.pessoas.some((p) => p.id === med.dados.id), 'equipe: médico de fora não entra na escala');
+  // Patrimônio
+  conferir((await api('POST', '/api/patrimonio', { nome: 'X', categoria: 'Inventada' })).status === 400, 'patrimônio: categoria inventada é recusada');
+  const ontemP = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE');
+  const pat = await api('POST', '/api/patrimonio', { nome: 'Extintor de teste', categoria: 'Segurança', codigo: 'T-1', valor: '1.234,50', proxima_revisao: ontemP });
+  conferir(pat.status === 201, 'patrimônio: cadastra item (valor com ponto e vírgula)');
+  conferir((await api('POST', '/api/patrimonio', { nome: 'Outro', categoria: 'Segurança', codigo: 'T-1' })).status === 400, 'patrimônio: número de patrimônio repetido é recusado');
+  let patLido = (await api('GET', `/api/patrimonio/${pat.dados.id}`)).dados.item;
+  conferir(patLido.valor === 1234.5 && patLido.revisao === 'vencida' && patLido.alerta, 'patrimônio: revisão vencida vira aviso');
+  const proxAno = new Date(Date.now() + 365 * 86400000).toLocaleDateString('sv-SE');
+  conferir((await api('POST', `/api/patrimonio/${pat.dados.id}/manutencoes`, { tipo: 'revisao', descricao: '', custo: '60' })).status === 400, 'patrimônio: manutenção sem descrição é recusada');
+  await api('POST', `/api/patrimonio/${pat.dados.id}/manutencoes`, { tipo: 'revisao', descricao: 'Recarga anual', custo: '60,00', proxima_revisao: proxAno });
+  patLido = (await api('GET', `/api/patrimonio/${pat.dados.id}`)).dados;
+  conferir(patLido.manutencoes.length === 1 && !patLido.item.alerta, 'patrimônio: registrar a revisão tira o aviso');
+  cookie = cookieMaria;
+  conferir((await api('DELETE', `/api/patrimonio/${pat.dados.id}`)).status === 403, 'patrimônio: equipe não apaga item');
+  cookie = meuCookie;
+  // Sinais vitais
+  conferir((await api('POST', '/api/sinais', { leituras: [{ residente_id: idTeste, pa: '12x8' }] })).status === 400, 'sinais: pressão escrita errado é recusada');
+  conferir((await api('POST', '/api/sinais', { leituras: [{ residente_id: idTeste, temperatura: '63' }] })).status === 400, 'sinais: temperatura impossível é recusada');
+  conferir((await api('POST', '/api/sinais', { leituras: [{ residente_id: idTeste, pa: '80x120' }] })).status === 400, 'sinais: mínima maior que a máxima é recusada');
+  conferir((await api('POST', '/api/sinais', { leituras: [{ residente_id: idTeste }] })).status === 400, 'sinais: linha vazia é recusada');
+  const ronda = await api('POST', '/api/sinais', { hora: '08:00', leituras: [{ residente_id: idTeste, pa: '180x110', temperatura: '36,4', saturacao: '97' }] });
+  conferir(ronda.status === 201 && ronda.dados.alertas.length === 1, 'sinais: salva a ronda e avisa pressão fora do normal');
+  const histSv = (await api('GET', `/api/sinais?residente=${idTeste}&dias=7`)).dados.itens;
+  conferir(histSv.some((l) => l.origem === 'ronda' && l.pa_sist === 180) && histSv.some((l) => l.origem === 'diario'), 'sinais: o histórico junta a ronda e os sinais do Diário');
+  cookie = cookieMaria;
+  conferir((await api('DELETE', `/api/sinais/${ronda.dados.ids[0]}`)).status === 403, 'sinais: equipe não apaga leitura de outra pessoa');
+  cookie = meuCookie;
   conferir((await api('POST', '/api/admin/demo')).status === 400, 'demonstração não se mistura com residente real');
   conferir((await api('DELETE', `/api/residentes/${idTeste}`)).status === 200, 'administração exclui a ficha');
   const acessos = (await api('GET', '/api/admin/log?q=residente')).dados;
@@ -275,9 +419,13 @@ async function principal() {
   const produtosDemo = (await api('GET', '/api/produtos')).dados.itens;
   const idProd = (produtosDemo.find((p) => p.nome.startsWith('Fralda geriátrica G')) || produtosDemo[0]).id;
   conferir(produtosDemo.filter((p) => p.alerta).length >= 2, `demonstração traz estoque com avisos (${produtosDemo.length} itens)`);
+  const metf = produtosDemo.find((p) => p.nome.startsWith('Metformina'));
+  conferir(metf && metf.dias_restantes != null && metf.dias_restantes < 7 && metf.acabando, `estoque: remédio ligado à prescrição mostra "dá para ${metf && metf.dias_restantes} dias" e avisa`);
   const ini = (await api('GET', '/api/inicio')).dados;
   conferir(ini.demo && ini.porSituacao.no_lar > 0 && Array.isArray(ini.aniversarios), 'Início resume a demonstração');
   conferir(ini.atencao_total >= 2 && ini.diario_hoje >= 1, `demonstração traz diário (${ini.diario_hoje} hoje, ${ini.atencao_total} pendentes)`);
+  const denovo = await api('POST', '/api/admin/demo');
+  conferir(denovo.status === 200 && Array.isArray(denovo.dados.completados) && !denovo.dados.completados.length, 'demonstração: "completar" com tudo já carregado não duplica nada');
   // o recado geral real (sem residente) criado acima continua; apagar a demonstração não pode levá-lo
   const bk = await api('POST', '/api/backups');
   conferir(bk.status === 201 && /^lar-.*\.db$/.test(bk.dados.arquivo || ''), 'faz cópia de segurança');
@@ -346,6 +494,7 @@ async function principal() {
   // Interações principais
   telaAtual = 'interações';
   await abrir('#/residentes');
+  conferir(await avaliar(`(() => { const b = document.querySelector('#btnConta').getBoundingClientRect(); return b.bottom <= innerHeight && b.top >= 0; })()`), 'menu: o botão da conta cabe na tela (trilho com muitos grupos)');
   await avaliar(`document.querySelector('#resNovo').click()`);
   conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto #rNome')`), 'botão Novo residente abre a janela');
   await foto('janela-novo-residente');
@@ -440,6 +589,84 @@ async function principal() {
   await foto('remedios-folha');
   await avaliar(`[...document.querySelectorAll('.dose')].find((d) => d.textContent.includes('Remédio de teste')).querySelector('[data-marcar="dado"]').click()`);
   conferir(await aguardar(`[...document.querySelectorAll('.dose.dado')].some((d) => d.textContent.includes('Remédio de teste') && d.textContent.includes('Kevin'))`), 'remédios: "Dei" marca na hora, com o nome de quem deu');
+
+  // Vacinas: campanha para vários
+  await abrir('#/vacinas');
+  await avaliar(`document.querySelector('#vacCampanha').click()`);
+  conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto #cpSalvar')`), 'vacinas: Campanha abre a janela');
+  await avaliar(`(() => { const v = document.querySelector('#vcVacina'); v.value = 'Covid-19'; v.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+  conferir(await avaliar(`document.querySelectorAll('input[id^="cpR"]:checked').length > 0`), 'vacinas: campanha já marca quem ainda não tomou no ano');
+  await foto('vacinas-campanha');
+  await avaliar(`document.querySelector('#cpSalvar').click()`);
+  conferir(await aguardar(`!document.querySelector('.modal-fundo') && !!document.querySelector('.tabela-vac')`), 'vacinas: campanha salva e volta para o painel');
+
+  // Sinais vitais: ronda (valor fora do normal fica vermelho) e gráfico com dica
+  await abrir('#/sinais');
+  await avaliar(`(() => { const i = document.querySelector('tbody tr input[data-k="pa"]'); i.value = '190x115'; i.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+  conferir(await avaliar(`document.querySelector('tbody tr input[data-k="pa"]').classList.contains('fora')`), 'sinais: pressão alta fica vermelha enquanto digita');
+  await avaliar(`document.querySelector('#svSalvar').click()`);
+  conferir(await aguardar(`!!document.querySelector('.faixa.perigo') && document.body.textContent.includes('190x115')`), 'sinais: a ronda salva e o aviso aparece no alto');
+  await foto('sinais-ronda-salva');
+  await abrir(`#/sinais/residente-${idFicha}`);
+  conferir(await aguardar(`document.querySelectorAll('.grafico-sinal svg path.linha-s1').length >= 3`), 'sinais: os gráficos aparecem (um por medida)');
+  await avaliar(`(() => { const s = document.querySelector('.grafico-sinal svg'); const r = s.getBoundingClientRect();
+    s.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + r.width * 0.6, clientY: r.top + r.height / 2, bubbles: true })); })()`);
+  conferir(await aguardar(`[...document.querySelectorAll('.dica-graf')].some((d) => !d.hidden && d.textContent.includes('mmHg'))`), 'sinais: passar o mouse mostra a dica com o valor');
+  await foto('sinais-graficos-dica');
+  await avaliar(`document.querySelector('.vistaSv button[data-v="tabela"]').click()`);
+  conferir(await aguardar(`!!document.querySelector('#svArea table')`), 'sinais: dá para ver em tabela');
+  await avaliar(`document.querySelector('.vistaSv button[data-v="graficos"]').click()`);
+
+  // Avaliações: reavaliar pelo questionário (a soma aparece enquanto marca)
+  await abrir('#/avaliacoes');
+  await avaliar(`document.querySelector('[data-avaliar][data-esc="morse"]').click()`);
+  conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto input[name="av_quedas"]')`), 'avaliações: abre o questionário');
+  await avaliar(`(() => { for (const nome of ['av_quedas','av_diagnosticos','av_apoio','av_soro','av_marcha','av_mental']) { const r = document.querySelector('input[name="' + nome + '"]'); r.checked = true; }
+    document.querySelector('input[name="av_quedas"][value="25"]').checked = true; document.querySelector('.modal-fundo.aberto .modal').dispatchEvent(new Event('change', {bubbles:true})); })()`);
+  conferir(await aguardar(`document.querySelector('#avSoma').textContent.includes('25/125')`), 'avaliações: a pontuação aparece enquanto marca');
+  await foto('avaliacao-questionario');
+  await avaliar(`document.querySelector('#avSalvar').click()`);
+  conferir(await aguardar(`!document.querySelector('.modal-fundo')`), 'avaliações: salva a avaliação');
+
+  // PIA: revisar (nova versão)
+  await abrir(`#/pia/residente-${idFicha}`);
+  await avaliar(`document.querySelector('#piaRevisar').click()`);
+  conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto #pia_saude_situacao') && document.querySelector('#pia_saude_situacao').value.length > 5`), 'PIA: o formulário abre já preenchido');
+  await foto('pia-formulario');
+  await avaliar(`(() => { document.querySelector('#pia_saude_acoes').value = 'Cuidado combinado pelo teste'; document.querySelector('#piaSalvar').click(); })()`);
+  conferir(await aguardar(`!document.querySelector('.modal-fundo') && document.body.textContent.includes('Cuidado combinado pelo teste')`), 'PIA: a revisão salva e aparece no documento');
+
+  // Financeiro: abrir o recibo de uma receita recebida (valor por extenso)
+  await abrir('#/lancamentos');
+  await avaliar(`document.querySelector('.fTipo button[data-v="receita"]').click(); document.querySelector('.fSit button[data-v="pago"]').click();`);
+  conferir(await aguardar(`!!document.querySelector('#lcLista a[href^="#/recibo/"]')`), 'financeiro: receita recebida tem recibo');
+  await avaliar(`document.querySelector('#lcLista a[href^="#/recibo/"]').click()`);
+  conferir(await aguardar(`!!document.querySelector('.recibo') && /reais/.test(document.querySelector('.recibo').textContent)`), 'financeiro: o recibo abre com o valor por extenso');
+  await foto('financeiro-recibo');
+
+  // Tarefas: marcar como feita pelo círculo
+  await abrir('#/tarefas');
+  const idTf = await avaliar(`document.querySelector('.tarefa:not(.feita) [data-feita]').dataset.feita`);
+  await avaliar(`document.querySelector('.tarefa:not(.feita) [data-feita]').click()`);
+  conferir(await aguardar(`!!document.querySelector('.tarefa.feita [data-feita="${idTf}"]')`), 'tarefas: o círculo marca a tarefa como feita');
+  await foto('tarefas-feita');
+
+  // Patrimônio: abrir um item e registrar manutenção
+  await abrir('#/patrimonio');
+  await avaliar(`document.querySelector('#patLista a[href^="#/patrimonio/item-"]').click()`);
+  conferir(await aguardar(`!!document.querySelector('#piManut')`), 'patrimônio: abre a página do item');
+  await avaliar(`document.querySelector('#piManut').click()`);
+  conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto #mnDesc')`), 'patrimônio: Registrar manutenção abre a janela');
+  await avaliar(`(() => { document.querySelector('#mnDesc').value = 'Conserto de teste'; document.querySelector('#mnOk').click(); })()`);
+  conferir(await aguardar(`document.body.textContent.includes('Conserto de teste') && !document.querySelector('.modal-fundo')`), 'patrimônio: a manutenção aparece no histórico');
+  await foto('patrimonio-item');
+
+  // Escala: clicar num dia e trocar o código
+  await abrir('#/escala');
+  await avaliar(`document.querySelector('button.cel-escala').click()`);
+  conferir(await aguardar(`!!document.querySelector('.menu-flutuante.aberto [data-cod-escolha="FE"]')`), 'escala: clicar no dia abre os códigos');
+  await avaliar(`document.querySelector('.menu-flutuante.aberto [data-cod-escolha="FE"]').click()`);
+  conferir(await aguardar(`document.querySelector('button.cel-escala').textContent.trim() === 'FE'`), 'escala: o dia muda para Férias na hora');
 
   // Celular
   await cdp.enviar('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });

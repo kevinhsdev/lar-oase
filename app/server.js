@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { db, inicializar, cfg, cfgPublica, gravarCfg, registrar, registrarAcesso, transacao, hashSenha, conferirSenha, SENHA_INICIAL, PASTA_DADOS, restauracao } = require('./lib/db');
 const copias = require('./lib/backup');
 const { VERSAO } = require('./lib/versao');
-const { gerarDemo } = require('./lib/demo');
+const { gerarDemo, completarDemo } = require('./lib/demo');
 
 inicializar();
 
@@ -331,7 +331,12 @@ rota('PUT', '/api/admin/usuarios/:id', async (req, res, { u, p }) => {
 rota('POST', '/api/admin/demo', async (req, res, { u }) => {
   exigirAdmin(u);
   if (db.prepare('SELECT 1 FROM residentes WHERE demo = 0 LIMIT 1').get()) falha(400, 'Já existem residentes reais cadastrados: a demonstração não pode ser misturada a eles.');
-  if (db.prepare('SELECT 1 FROM residentes WHERE demo = 1 LIMIT 1').get()) falha(400, 'A demonstração já está carregada.');
+  if (db.prepare('SELECT 1 FROM residentes WHERE demo = 1 LIMIT 1').get()) {
+    // Já carregada: completa só os módulos que ainda não têm dados fictícios (quem carregou antes de um módulo existir)
+    const completados = completarDemo(db, transacao);
+    registrar(u.login, 'completou a demonstração', { modulos: completados });
+    return json(res, 200, { completados });
+  }
   const n = gerarDemo(db, transacao);
   registrar(u.login, 'carregou a demonstração', { residentes: n });
   json(res, 200, { residentes: n });
@@ -345,6 +350,10 @@ rota('DELETE', '/api/admin/demo', async (req, res, { u }) => {
     db.prepare('DELETE FROM ocorrencias WHERE demo = 1').run(); // os recados gerais fictícios (sem residente)
     db.prepare('DELETE FROM agenda WHERE demo = 1').run(); // idem para os compromissos do lar
     db.prepare('DELETE FROM produtos WHERE demo = 1').run(); // as movimentações saem junto (ON DELETE CASCADE)
+    db.prepare('DELETE FROM profissionais WHERE demo = 1').run(); // a escala sai junto
+    db.prepare('DELETE FROM patrimonio WHERE demo = 1').run(); // as manutenções saem junto
+    db.prepare('DELETE FROM tarefas WHERE demo = 1').run();
+    db.prepare('DELETE FROM lancamentos WHERE demo = 1').run();
   });
   registrar(u.login, 'apagou a demonstração', '');
   json(res, 200, { ok: true });
@@ -368,8 +377,22 @@ require('./rotas/diario')(ctx);
 require('./rotas/agenda')(ctx);
 require('./rotas/estoque')(ctx);
 require('./rotas/remedios')(ctx);
+require('./rotas/vacinas')(ctx);
+require('./rotas/equipe')(ctx);
+require('./rotas/patrimonio')(ctx);
+require('./rotas/sinais')(ctx);
+require('./rotas/tarefas')(ctx);
+require('./rotas/avaliacoes')(ctx);
+require('./rotas/pia')(ctx);
+require('./rotas/financeiro')(ctx);
 require('./rotas/backup')(ctx);
 require('./rotas/atualizacao')(ctx);
+
+// Quem carregou a demonstração antes de um módulo existir recebe a parte fictícia dele ao abrir o sistema
+{
+  const completados = completarDemo(db, transacao);
+  if (completados.length) { registrar('sistema', 'completou a demonstração com os módulos novos', { modulos: completados }); console.log('  Demonstração completada:', completados.join(', ')); }
+}
 
 // ───────────────────────── servidor ─────────────────────────
 const servidor = http.createServer(async (req, res) => {

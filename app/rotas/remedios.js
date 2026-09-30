@@ -31,10 +31,13 @@ function conflitoAlergia(medicamento, alergias) {
 }
 
 module.exports = function remedios(ctx) {
-  const { rota, db, registrar, falha, conferirVersao, json, corpoJson, exigirAdmin, hoje, agoraIso } = ctx;
+  const { rota, db, registrar, transacao, falha, conferirVersao, json, corpoJson, exigirAdmin, hoje, agoraIso } = ctx;
 
   const SELECT = `SELECT p.*, r.nome residente_nome, r.apelido residente_apelido, r.quarto residente_quarto, r.alergias residente_alergias,
-      r.situacao residente_situacao, u.nome autor_nome FROM prescricoes p JOIN residentes r ON r.id = p.residente_id LEFT JOIN usuarios u ON u.login = p.criado_por`;
+      r.situacao residente_situacao, u.nome autor_nome, pr.nome produto_nome, pr.unidade produto_unidade
+    FROM prescricoes p JOIN residentes r ON r.id = p.residente_id LEFT JOIN usuarios u ON u.login = p.criado_por LEFT JOIN produtos pr ON pr.id = p.produto_id`;
+  // Saldo de um item do estoque (entrada e ajuste somam; saída tira)
+  const saldoProduto = (id) => db.prepare("SELECT COALESCE(SUM(CASE tipo WHEN 'saida' THEN -quantidade ELSE quantidade END), 0) s FROM movimentos WHERE produto_id = ?").get(id).s;
   const comAviso = (p) => ({ ...p, alergia: conflitoAlergia(p.medicamento, p.residente_alergias) });
 
   function limpar(b, parcial) {
@@ -61,6 +64,16 @@ module.exports = function remedios(ctx) {
     if (!parcial || b.inicio !== undefined) { const i = b.inicio || hoje(); if (!dataValida(i)) falha(400, 'Data de início inválida'); reg.inicio = i; }
     if (b.fim !== undefined) { reg.fim = b.fim || null; if (reg.fim && !dataValida(reg.fim)) falha(400, 'Data de fim inválida'); }
     if (reg.fim && reg.inicio && reg.fim < reg.inicio) falha(400, 'O fim precisa ser depois do início');
+    // Ligação com o estoque (opcional): qual item e quanto sai a cada dose, na unidade do item
+    if (b.produto_id !== undefined) {
+      reg.produto_id = b.produto_id === '' || b.produto_id == null ? null : Number(b.produto_id);
+      if (reg.produto_id != null && !db.prepare('SELECT 1 FROM produtos WHERE id = ?').get(reg.produto_id)) falha(400, 'Item do estoque não encontrado');
+    }
+    if (b.qtd_por_dose !== undefined) {
+      if (b.qtd_por_dose === '' || b.qtd_por_dose == null) reg.qtd_por_dose = null;
+      else { const n = Number(String(b.qtd_por_dose).replace(',', '.')); if (!Number.isFinite(n) || n <= 0 || n > 100) falha(400, 'Quantidade por dose inválida'); reg.qtd_por_dose = n; }
+    }
+    if (reg.produto_id && reg.qtd_por_dose == null) reg.qtd_por_dose = 1;
     return reg;
   }
 
@@ -183,11 +196,22 @@ module.exports = function remedios(ctx) {
     if (p.se_necessario && b.situacao === 'dado' && !motivo) falha(400, 'Diga por que precisou (ex.: dor de cabeça, febre de 38 °C)');
     const hora = b.hora_real || (data === hoje() ? horaAgora() : horario);
     if (hora && !horaValida(hora)) falha(400, 'Hora inválida');
-    const id = Number(db.prepare(`INSERT INTO administracoes (prescricao_id, data, horario, situacao, hora_real, motivo, criado_em, criado_por, demo) VALUES (?,?,?,?,?,?,?,?,?)`)
-      .run(p.id, data, horario, b.situacao, hora || null, motivo, agoraIso(), u.login, p.demo).lastInsertRowid);
+    // Dado + ligado ao estoque: dá baixa sozinho (se tiver no estoque; se não tiver, marca mesmo assim e avisa)
+    let movimento = null, avisoEstoque = null;
+    const id = transacao(() => {
+      if (b.situacao === 'dado' && p.produto_id && p.qtd_por_dose) {
+        const saldo = saldoProduto(p.produto_id);
+        if (saldo + 1e-9 >= p.qtd_por_dose) {
+          movimento = Number(db.prepare(`INSERT INTO movimentos (produto_id, data, tipo, quantidade, residente_id, obs, criado_em, criado_por, demo) VALUES (?,?,'saida',?,?,?,?,?,?)`)
+            .run(p.produto_id, data, p.qtd_por_dose, p.residente_id, `Remédio dado: ${p.residente_apelido || p.residente_nome}${horario ? ' às ' + horario : ''}`, agoraIso(), u.login, p.demo).lastInsertRowid);
+        } else avisoEstoque = `O estoque de ${p.produto_nome} está zerado no sistema: a baixa não foi feita. Confira a prateleira e faça uma entrada ou contagem.`;
+      }
+      return Number(db.prepare(`INSERT INTO administracoes (prescricao_id, data, horario, situacao, hora_real, motivo, criado_em, criado_por, demo, movimento_id) VALUES (?,?,?,?,?,?,?,?,?,?)`)
+        .run(p.id, data, horario, b.situacao, hora || null, motivo, agoraIso(), u.login, p.demo, movimento).lastInsertRowid);
+    });
     registrar(u.login, `remédio ${SITUACOES[b.situacao].toLowerCase()}: ${p.medicamento}${horario ? ' das ' + horario : ' (se necessário)'}`,
-      { residente_id: p.residente_id, nome: p.residente_nome, prescricao: p.id, administracao: id, data, motivo });
-    json(res, 201, { id });
+      { residente_id: p.residente_id, nome: p.residente_nome, prescricao: p.id, administracao: id, data, motivo, baixa_estoque: movimento ? p.qtd_por_dose : undefined });
+    json(res, 201, { id, baixa: movimento ? { quantidade: p.qtd_por_dose, item: p.produto_nome } : null, aviso_estoque: avisoEstoque });
   });
 
   // Desfazer uma marcação errada: quem marcou (no mesmo dia) ou a administração
@@ -196,7 +220,10 @@ module.exports = function remedios(ctx) {
       JOIN residentes r ON r.id = p.residente_id WHERE a.id = ?`).get(+p.id) || falha(404, 'Marcação não encontrada');
     const mesmoDia = a.criado_em && new Date(a.criado_em).toLocaleDateString('sv-SE') === hoje();
     if (u.perfil !== 'admin' && !(a.criado_por === u.login && mesmoDia)) falha(403, 'Só quem marcou (no mesmo dia) ou a administração pode desfazer');
-    db.prepare('DELETE FROM administracoes WHERE id = ?').run(a.id);
+    transacao(() => {
+      db.prepare('DELETE FROM administracoes WHERE id = ?').run(a.id);
+      if (a.movimento_id) db.prepare('DELETE FROM movimentos WHERE id = ?').run(a.movimento_id); // devolve ao estoque
+    });
     registrar(u.login, `desfez marcação de remédio: ${a.medicamento}${a.horario ? ' das ' + a.horario : ''}`, { residente_id: a.residente_id, nome: a.residente_nome, data: a.data, situacao: a.situacao });
     json(res, 200, { ok: true });
   });

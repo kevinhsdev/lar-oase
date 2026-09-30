@@ -21,6 +21,8 @@ function etiquetasEst(p) {
   const e = [];
   if (p.zerado) e.push(`<span class="etiqueta perigo">${icone('alerta')}Acabou</span>`);
   else if (p.acabando) e.push(`<span class="etiqueta aviso">${icone('alerta')}Acabando</span>`);
+  // Remédio ligado a prescrições: para quantos dias ainda dá
+  if (p.dias_restantes != null && !p.zerado) e.push(`<span class="etiqueta ${p.dias_restantes < 7 ? 'aviso' : 'info'}" title="Sai ${esc(numEst(p.consumo_dia))} por dia pelas prescrições">${icone('pilula')}Dá para ${p.dias_restantes} ${p.dias_restantes === 1 ? 'dia' : 'dias'}</span>`);
   if (p.vencido > 0) e.push(`<span class="etiqueta perigo">Vencido: ${esc(qtdEst(p.vencido, p.unidade))}</span>`);
   else if (p.vencendo > 0 && p.proxima_validade) {
     const d = -diasDesde(p.proxima_validade);

@@ -9,7 +9,8 @@ const dataValida = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.pa
 const horaValida = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 
 module.exports = function agenda(ctx) {
-  const { rota, db, registrar, falha, conferirVersao, json, corpoJson, agoraIso } = ctx;
+  const { rota, db, registrar, transacao, falha, conferirVersao, json, corpoJson, agoraIso } = ctx;
+  const crypto = require('crypto');
 
   const SELECT = `SELECT a.*, r.nome residente_nome, r.apelido residente_apelido, r.quarto residente_quarto, r.situacao residente_situacao, u.nome autor_nome
     FROM agenda a LEFT JOIN residentes r ON r.id = a.residente_id LEFT JOIN usuarios u ON u.login = a.criado_por`;
@@ -52,16 +53,51 @@ module.exports = function agenda(ctx) {
     json(res, 200, { itens, tipos: TIPOS, situacoes: SITUACOES });
   });
 
+  // Datas de uma repetição: a partir do dia, a cada "frequencia", até "ate" (no máximo 1 ano / 120 vezes)
+  function datasRepeticao(inicio, frequencia, ate) {
+    const passos = { diaria: [1, 'd'], semanal: [7, 'd'], quinzenal: [14, 'd'], mensal: [1, 'm'] };
+    const p = passos[frequencia] || falha(400, 'Repetição inválida');
+    if (!dataValida(ate || '') || ate <= inicio) falha(400, 'Até quando repetir? Escolha uma data depois do primeiro dia');
+    const limite = new Date(inicio + 'T12:00:00'); limite.setFullYear(limite.getFullYear() + 1);
+    const datas = [];
+    for (let i = 0; datas.length < 120; i++) {
+      const d = new Date(inicio + 'T12:00:00');
+      if (p[1] === 'd') d.setDate(d.getDate() + i * p[0]); else d.setMonth(d.getMonth() + i);
+      if (p[1] === 'm' && d.getDate() !== Number(inicio.slice(8))) continue; // dia 31 em mês curto: pula
+      const iso = d.toLocaleDateString('sv-SE');
+      if (iso > ate || d > limite) break;
+      datas.push(iso);
+    }
+    return datas;
+  }
+
   rota('POST', '/api/agenda', async (req, res, { u }) => {
-    const reg = limpar(await corpoJson(req), false);
+    const b = await corpoJson(req);
+    const reg = limpar(b, false);
     const agora = agoraIso();
     const demo = reg.residente_id ? db.prepare('SELECT demo FROM residentes WHERE id = ?').get(reg.residente_id).demo : 0;
     Object.assign(reg, { situacao: 'agendado', criado_em: agora, criado_por: u.login, atualizado_em: agora, atualizado_por: u.login, demo });
-    const ks = Object.keys(reg);
-    const id = Number(db.prepare(`INSERT INTO agenda (${ks.join(', ')}) VALUES (${ks.map(() => '?').join(', ')})`).run(...ks.map((k) => reg[k])).lastInsertRowid);
-    const a = db.prepare(`${SELECT} WHERE a.id = ?`).get(id);
-    registrar(u.login, `agendou: ${TIPOS[a.tipo]}`, detalhe(a, { compromisso: id }));
-    json(res, 201, { id });
+    // Repetição: cria um compromisso por data, todos com a mesma "serie" (dá para desmarcar um ou todos os seguintes)
+    const datas = b.repetir ? datasRepeticao(reg.data, b.repetir, b.repetir_ate) : [reg.data];
+    if (datas.length > 1) reg.serie = crypto.randomUUID();
+    const ks = [...Object.keys(reg).filter((k) => k !== 'data'), 'data'];
+    const ids = transacao(() => datas.map((d) => Number(db.prepare(`INSERT INTO agenda (${ks.join(', ')}) VALUES (${ks.map(() => '?').join(', ')})`)
+      .run(...ks.map((k) => (k === 'data' ? d : reg[k]))).lastInsertRowid)));
+    const a = db.prepare(`${SELECT} WHERE a.id = ?`).get(ids[0]);
+    registrar(u.login, `agendou: ${TIPOS[a.tipo]}${datas.length > 1 ? ` (${datas.length} vezes, até ${datas[datas.length - 1]})` : ''}`, detalhe(a, { compromisso: ids[0] }));
+    json(res, 201, { id: ids[0], vezes: datas.length });
+  });
+
+  // Desmarcar (ou apagar) este e os próximos compromissos da mesma repetição
+  rota('POST', '/api/agenda/:id/serie', async (req, res, { u, p }) => {
+    const b = await corpoJson(req);
+    const a = db.prepare(`${SELECT} WHERE a.id = ?`).get(+p.id) || falha(404, 'Compromisso não encontrado');
+    if (!a.serie) falha(400, 'Este compromisso não se repete');
+    const seguintes = db.prepare("SELECT id FROM agenda WHERE serie = ? AND data >= ? AND situacao = 'agendado'").all(a.serie, a.data).map((x) => x.id);
+    const motivo = String(b.motivo || '').trim().slice(0, 500) || 'Repetição encerrada';
+    transacao(() => { for (const id of seguintes) db.prepare("UPDATE agenda SET situacao = 'cancelado', resultado = ?, atualizado_em = ?, atualizado_por = ? WHERE id = ?").run(motivo, agoraIso(), u.login, id); });
+    registrar(u.login, `desmarcou a repetição: ${a.titulo}`, detalhe(a, { vezes: seguintes.length, motivo }));
+    json(res, 200, { vezes: seguintes.length });
   });
 
   // Qualquer pessoa da equipe edita (a agenda é de todos); o histórico e a auditoria guardam quem mudou

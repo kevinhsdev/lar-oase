@@ -46,7 +46,7 @@
 | LGPD | Dados reais **nunca** vão para o GitHub. Testes com a **demonstração fictícia**, em banco temporário. A demonstração **não tem CPF** e usa telefones `(11) 90000-00xx`. |
 | Entrega | Um módulo por vez, cada um testado (`node ferramentas\testar-telas.mjs`) antes do próximo. |
 
-## 3. O que já existe (versão 0.6.0)
+## 3. O que já existe (versão 0.16.1)
 
 - **Entrada** com usuário e senha (5 erros = espera 1 minuto), **troca obrigatória** da senha inicial (com barra de força),
   trocar senha pelo menu da conta.
@@ -57,7 +57,7 @@
 - **Menu**: trilho lateral com a marca e os grupos (no celular vira **barra de abas embaixo**), abas no alto quando o grupo tem
   várias telas, contador amarelo (hospitalizados), **busca rápida de residente** no topo (tecla `/`), **Ajuda** em cada tela
   (botão `?` ou tecla `?`), menu da conta (tema, modo compacto, bloquear, trocar senha, sair).
-- **Início**: saudação, números (no lar, hospitalizados, aniversários em 30 dias, fichas), próximos aniversários, hospitalizados
+- **Início**: saudação, números (no lar, hospitalizados, aniversários em 30 dias, fichas) e cartões em **duas colunas equilibradas**; os **próximos aniversários** mostram só os 4 mais perto (+ "E mais N"; 0.16.1 — antes ocupava uma coluna inteira), hospitalizados
   agora, quem chegou por último. Avisa se a cópia de segurança está atrasada (só admin).
 - **Residentes** (módulo 1):
   - Lista em **cartões** ou **lista** (escolha lembrada no navegador), busca (nome, apelido, quarto, familiar, CPF),
@@ -114,7 +114,68 @@
     Desfazer: quem marcou (mesmo dia) ou admin. Só entra na folha quem está **no lar** (hospitalizado não).
   - Ficha do residente: "Remédios em uso". Início: "Remédios de hoje" (X de Y marcados, atrasados).
   - Demonstração: 22 prescrições (respeitam as alergias fictícias), 3 dias de folha marcada, alguns recusados e alguns atrasados hoje.
-- **Celular:** a barra de baixo mostra 4 grupos (Início, Residentes, Diário, **Remédios**) + **"Mais"** (Agenda, Estoque, Configurações).
+- **Vacinas** (0.7.0 — "Gestão de imunizações" do Gerifácil), aba do grupo **Saúde** (`#/vacinas`):
+  painel de todos os residentes com a última dose das 5 vacinas principais (gripe, Covid, pneumonia, dT, hepatite B), números
+  (campanha da gripe do ano, doses atrasadas, vencendo em 30 dias), **cartão de vacina** de cada um (`#/vacinas/residente-ID`, imprimível),
+  **Campanha** (mesma vacina para vários; já marca quem não tomou no ano). Prazos: gripe 365 dias, Covid 180, dT 3650; as outras seguem
+  a "próxima dose" anotada (`VACINAS` em rotas/vacinas.js — **conferir com o posto a cada campanha**). Na ficha e no Início.
+- **Equipe** (0.8.0 — "Escala de turnos" + "Organização do corpo clínico" do Gerifácil), grupo novo com ícone de crachá:
+  - **Profissionais** (`#/profissionais`): equipe do lar e de fora (médicos com CRM, COREN, CREFITO…), função, especialidade, vínculo
+    (funcionário, voluntário, prestador, SUS/UBS), telefone, "aparece na escala", "ainda trabalha no lar". Só admin cadastra/edita.
+    Os médicos viram sugestão no campo "Médico(a)" da prescrição.
+  - **Escala** (`#/escala`, `#/escala/AAAA-MM`): grade do mês (pessoa × dia) com códigos M, T, N, D (12 h dia), NN (12 h noite), F, FE, AT
+    (**provisórios** — `CODIGOS` em rotas/equipe.js). Admin clica no dia para trocar; **Preencher com padrão** (12x36 dia/noite, 6x1, 5x2).
+    Linhas de baixo contam quem trabalha de dia e de noite (0 em vermelho = buraco na escala). Início: "No plantão hoje".
+- **Patrimônio** (0.9.0 — "Inventário de itens da unidade" do Gerifácil), aba do grupo **Estoque** (`#/patrimonio`):
+  itens por local (nome, categoria, nº de patrimônio, estado bom/regular/ruim/em manutenção/baixado, em uso por qual residente,
+  origem, aquisição, valor, garantia, **próxima revisão**). Página do item (`#/patrimonio/item-ID`) com o histórico de manutenções
+  (tipo, custo, quem fez) e **Registrar manutenção** (já muda estado e próxima revisão). Filtro "Atenção" = ruim, em manutenção ou
+  revisão vencida/vencendo (30 dias). Apagar só admin; o normal é "Baixado". Valor no formato brasileiro (1.500,00).
+- **Sinais vitais** (0.10.0), aba do grupo **Saúde** (`#/sinais`):
+  - **Ronda do dia**: tabela com todos os residentes no lar (pressão 120x80, temperatura, glicemia, saturação, batimentos, dor 0–10);
+    valor fora do normal fica vermelho enquanto digita; **Salvar a ronda** grava todos de uma vez; faixa no alto com quem ficou fora do normal.
+  - **Gráficos** de cada residente (`#/sinais/residente-ID`, 7/30/90 dias): **um gráfico por medida** (nunca dois eixos), SVG puro
+    (`graficoSinal`), linha 2px, pontos com anel (vermelho = fora do normal), faixa do normal ao fundo (menos na pressão), legenda na pressão,
+    **dica ao passar o mouse/dedo**, e a vista **Tabela**. Junta os sinais anotados no **Diário**. Cores `--graf-1/--graf-2`
+    **validadas** com o script da skill dataviz (claro e escuro). Faixas de normal **provisórias** (`MEDIDAS` em rotas/sinais.js).
+  - Na ficha: última medida e "Ver gráficos".
+- **Remédios ↔ Estoque** (0.11.0): a prescrição pode ligar a um item do estoque + "quanto sai por dose" (colunas `produto_id`,
+  `qtd_por_dose`). Marcar **Dei** grava uma saída no estoque (`administracoes.movimento_id`); desfazer apaga a saída (devolve).
+  Se o estoque estiver zerado, marca mesmo assim e avisa. O Estoque calcula o **consumo diário** pelas prescrições ativas e mostra
+  **"Dá para N dias"** (menos de 7 dias = "Acabando"). Demonstração: Losartana e Metformina em comprimidos (a metformina no fim).
+- **Agenda com repetição + Tarefas** (0.12.0): ao agendar, **Repetir** (todo dia, toda semana, a cada 2 semanas, todo mês) até uma data
+  (máx. 1 ano/120 vezes; coluna `agenda.serie`); nos detalhes, **Parar a repetição** desmarca este e os próximos. **Tarefas** (aba da Agenda,
+  `#/tarefas`, `#/tarefas/minhas`): título, detalhes, responsável (usuário ou equipe toda), prazo, urgente, repetição (ao concluir, cria a
+  próxima), residente opcional; atrasadas no topo; círculo para concluir; Início mostra "Minhas tarefas de hoje".
+- **Avaliações** (0.13.0), aba do grupo **Saúde** (`#/avaliacoes`): escalas **Katz** (independência, 0–6), **Braden** (risco de ferida,
+  6–23; menor = pior) e **Morse** (risco de queda, 0–125). Perguntas em linguagem simples (`ESCALAS` em rotas/avaliacoes.js — **conferir com
+  a enfermagem**); o servidor soma e classifica; a tela mostra a soma enquanto marca; reavaliação já vem com as respostas anteriores.
+  Painel com a última de cada escala, "Reavaliar" depois de 90 dias, filtros "Fazer/reavaliar" e "Risco alto"; histórico por residente
+  com ↑↓; resumo na ficha. Demonstração coerente com o grau de dependência.
+- **PIA — Plano Individual de Atenção** (0.14.0), aba do grupo **Residentes** (`#/pia`, `#/pia/residente-ID`, versões `-vID`): 7 áreas
+  (saúde, alimentação, mobilidade/quedas, pele/higiene, memória/comportamento, família/espiritualidade, lazer) com situação atual, metas,
+  cuidados combinados e responsável; data, próxima revisão (180 dias), participantes. **A situação atual é sugerida** com o que o sistema
+  sabe (diagnósticos, alergias, remédios, dieta, peso, Morse, Braden, Katz, família, religião). Cada revisão = versão nova (tabela `pias`).
+  Painel com vencidos; impressão com espaço para assinaturas. Pedido pela RDC 502/2021 — **validar o modelo com a responsável técnica**.
+- **Prontuário completo** (0.15.0, `#/prontuario/ID`, botão "Prontuário" na ficha): uma página que só lê e junta tudo — identificação,
+  alergias, remédios em uso, últimas avaliações, **resumo dos sinais vitais** (média/menor/maior/avisos), PIA atual, consultas do período,
+  vacinas e diário do período (30 dias, 90 dias ou 1 ano). Pensada para imprimir/levar a consultas (`public/prontuario.js`).
+- **Financeiro** (0.16.0 — **só a administração**, no menu e no servidor), grupo com 3 abas + recibo:
+  - **Resumo** (`#/financeiro[/AAAA-MM]`): entrou/saiu/saldo pela data do pagamento, a receber/a pagar, **atrasados**, vencendo em 7 dias,
+    gráfico de barras de 6 meses (receitas × despesas, cores `--graf-1/2` validadas, dica ao passar o mouse) e **resultado por categoria** (DRE simples).
+  - **Contas** (`#/lancamentos`): receitas e despesas (categorias fixas em `CATEGORIAS` de rotas/financeiro.js), valor em formato brasileiro,
+    vencimento, **repetir por 3/6/12 meses**, Receber/Pagar (data, valor, forma), desfazer, filtros por tipo e situação, total do filtro.
+  - **Mensalidades** (`#/mensalidades`): valor e dia de vencimento por residente (colunas `residentes.mensalidade/dia_vencimento`),
+    **Gerar as mensalidades do mês** (uma por residente por mês — índice único `competencia`), Receber, Recibo.
+  - **Recibo** (`#/recibo/ID`): nº, valor, **valor por extenso** (`porExtenso`), referente a, forma, data e assinatura — imprimível.
+  - Boleto bancário e "IA" ficam de fora (precisam de banco/internet). Demonstração: 6 meses de um lar filantrópico (valores inventados).
+- **Menu lateral com muitos grupos** (0.16.0): os itens ficam mais compactos e, se não couberem, a lista rola por dentro — o tema e a
+  conta ficam sempre visíveis (o teste confere que o botão da conta cabe na tela).
+- **Demonstração que se completa** (0.10.0): `MODULOS_DEMO` + `completarDemo()` em lib/demo.js. Ao abrir o sistema (e pelo botão
+  "Completar a demonstração"), os módulos sem dados fictícios recebem os seus — para quem carregou a demonstração antes deles existirem.
+  **Módulo novo: acrescente a linha dele em `MODULOS_DEMO`.**
+- **Menu:** o grupo "Remédios" virou **Saúde** (abas: Remédios de hoje, Prescrições, Vacinas; contador = remédios atrasados).
+- **Celular:** a barra de baixo mostra 4 grupos (Início, Residentes, Diário, **Saúde**) + **"Mais"** (Agenda, Estoque, Configurações).
 - **Configurações** (só admin): **Geral** (nome, bloqueio, demonstração, sobre), **Usuários** (criar, editar função/perfil,
   desativar, redefinir senha; sugere o login a partir do nome; sempre sobra um admin), **Cópias de segurança** (automáticas a
   cada 6 h, pasta, quantas guardar, senha AES-256, lista, restaurar agendado + reinício), **Celular e rede** (liberar a rede +
@@ -226,7 +287,7 @@ Ordem proposta — **um por vez**, mostrando à chefe antes do próximo:
 3. ~~**Remédios**~~ — feito na 0.6.0 (prescrições + folha do dia). **Falta validar as regras com a enfermagem do Lar.**
 4. ~~**Agenda**~~ — feita na 0.4.0 (adiantada, porque não dependia das respostas da chefe).
 5. ~~**Estoque**~~ — feito na 0.5.0.
-6. **Financeiro** — mensalidades, contas, recibos (provavelmente usado pela chefe do Kevin).
+6. ~~**Financeiro**~~ — feito na 0.16.0 (validar categorias e jeito de trabalhar com a chefe).
 Fora do escopo (precisam de internet/empresa): certificado/assinatura digital, boleto bancário, inteligência artificial.
 
 **O que o site do Gerifácil lista (conferido em 30/09/2026)** e onde isso cai aqui:
@@ -238,6 +299,7 @@ Operacional: estoque e produtos (→ Estoque), inventário/patrimônio (futuro),
 profissionais), escalas de turno (futuro). Também: "relatórios automáticos para auditorias e fiscalizações" (esperando a chefe dizer quais).
 
 ### 7.1 Levantar com a chefe (antes de programar o próximo módulo)
+**A lista completa e atualizada de perguntas está em `PERGUNTAS-PARA-A-CHEFE.md`** (na raiz; o Kevin anota as respostas lá). A lista abaixo é o histórico.
 **Já respondido (29/09):** lar de idosos; PC do Lar ligado todo dia; ~7 usuários; sem prioridade entre módulos; sem ficha de
 papel de base; financeiro provavelmente com a chefe; nome LAR.
 **Ainda falta:**
@@ -263,7 +325,7 @@ papel de base; financeiro provavelmente com a chefe; nome LAR.
 **Teste automático** (rede de proteção): na pasta do projeto, `node ferramentas\testar-telas.mjs` (qualquer Node 22+; usa o Edge
 escondido). Usa banco temporário e porta 3998, testa as regras da API (senha, CSRF, CPF, responsável único, perfis, conflito de
 edição, demonstração, cópia), abre todas as telas (computador, celular 390 px e modo escuro), faz as interações principais
-(cadastrar, familiar, situação, ajuda, busca, bloqueio) e tira fotos em `ferramentas\prints`. **0.6.0: 158 ok, 0 falhas.**
+(cadastrar, familiar, situação, ajuda, busca, bloqueio) e tira fotos em `ferramentas\prints`. **0.16.1: 249 ok, 0 falhas.**
 
 **GitHub:** repositório **privado** `https://github.com/kevinhsdev/lar-oase` (criado em 30/09/2026, ramo `main`, primeiro envio = 0.6.0).
 O botão Configurações › Atualizações busca as versões novas dele. Para mandar uma entrega nova (só quando o Kevin pedir):
@@ -294,3 +356,14 @@ GitHub usando o login que o Git Credential Manager já guardava. Para instalar o
 | 0.4.0 | 30/09/2026 | **Logo da OASE** (símbolo redesenhado em vetor a partir do print que o Kevin copiou; menu, entrada e aba do navegador) e nome oficial "Ordem Auxiliadora de Senhoras Evangélicas". Módulo **Agenda**: semana em colunas ou próximos 30 dias, cores por tipo, compromisso de residente ou do lar todo, quem acompanha/transporte, Foi feito (com resultado)/Desmarcar, próximos compromissos na ficha, agenda de hoje e amanhã no Início, demonstração. Teste: **109 ok**. |
 | 0.5.0 | 30/09/2026 | Nome do sistema trocado para **OASE - Lar** (menu, entrada, abas do navegador, janela preta, atalho `OASE - Lar` na área de trabalho). Módulo **Estoque**: itens por categoria, entrada (compra/doação/família/SUS, validade), saída, contagem, estoque mínimo, avisos de acabando/vencendo, página do item com lotes e movimentações, item pessoal de residente, demonstração. No celular, botão **"Mais"** na barra de baixo. Teste: **131 ok**. |
 | 0.6.0 | 30/09/2026 | Módulo **Remédios**: prescrições (dose, via, horários ou "se necessário", suspender), folha do dia com "Dei" em um toque, recusou/não dei com motivo, dose dupla bloqueada, atrasados, aviso de alergia, remédios em uso na ficha, cartão no Início. Menu do celular: Remédios entre os 4 primeiros. Abas do topo descem para uma linha própria no celular. Teste: **158 ok**. |
+| 0.7.0 | 30/09/2026 | **Vacinas** (cartão de vacina, painel com a última dose das vacinas principais, campanha para vários, avisos de dose atrasada). Grupo "Remédios" virou **Saúde**. |
+| 0.8.0 | 30/09/2026 | **Equipe**: Profissionais (corpo clínico e equipe) e **Escala** do mês (grade, códigos de turno, preencher com padrão 12x36/6x1/5x2, contagem de dia/noite, "no plantão hoje" no Início). Médicos viram sugestão na prescrição. |
+| 0.9.0 | 30/09/2026 | **Patrimônio** (inventário por local, estado, em uso por, revisões com aviso, histórico de manutenções). |
+| 0.10.0 | 30/09/2026 | **Sinais vitais** (ronda do dia para todos os residentes, avisos de fora do normal, gráficos por residente com dica e tabela, junta o Diário). **Demonstração que se completa** sozinha ao abrir (e botão "Completar a demonstração"). |
+| 0.11.0 | 30/09/2026 | **Remédios dão baixa no Estoque** (prescrição ligada a um item; "Dei" tira do estoque, desfazer devolve) e "dá para N dias" no Estoque. |
+| 0.12.0 | 30/09/2026 | **Agenda com repetição** (todo dia/semana/quinzena/mês, parar a repetição) e **Tarefas** da equipe (responsável, prazo, urgente, repetição). |
+| 0.13.0 | 30/09/2026 | **Avaliações** Katz, Braden e Morse (questionário que soma ao vivo, painel, reavaliar a cada 90 dias, histórico). |
+| 0.14.0 | 30/09/2026 | **PIA — Plano Individual de Atenção** (7 áreas, situação sugerida pelo sistema, versões, impressão). |
+| 0.15.0 | 30/09/2026 | **Prontuário completo** por residente (tudo numa página, por período, para imprimir). |
+| 0.16.0 | 30/09/2026 | **Financeiro** (resumo com gráfico e resultado por categoria, contas a pagar/receber, mensalidades, recibo com valor por extenso). Menu lateral que cabe com muitos grupos. Teste: **249 ok**. |
+| 0.16.1 | 30/09/2026 | Início: "Próximos aniversários" compacto (só os 4 mais perto) e cartões em duas colunas equilibradas. Arquivo **PERGUNTAS-PARA-A-CHEFE.md** com tudo o que falta validar. Teste: **249 ok**. |

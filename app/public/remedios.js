@@ -52,7 +52,7 @@ TELAS.medicacao = async (c, arg) => {
   const dia = /^\d{4}-\d{2}-\d{2}$/.test(arg || '') && arg <= hojeIso() ? arg : hojeIso();
   const d = await api('GET', `/api/medicacao?data=${dia}`);
   const r = d.resumo;
-  if (dia === hojeIso()) definirBadge('remedios', r.atrasado);
+  if (dia === hojeIso()) definirBadge('saude', r.atrasado);
   const marcados = r.dado + r.recusado + r.nao_dado;
   const org = EU.config.nome_organizacao || SUBTITULO_APP;
   const agoraMin = (() => { const x = new Date(); return x.getHours() * 60 + x.getMinutes(); })();
@@ -124,8 +124,9 @@ TELAS.medicacao = async (c, arg) => {
       if (bm.dataset.marcar === 'dado') {
         // "Dei": um toque só (é a ação mais repetida do dia)
         await botaoOcupado(bm, async () => {
-          await api('POST', '/api/medicacao', { prescricao_id: item.id, data: dia, horario: item.horario, situacao: 'dado' });
-          toast(`${item.medicamento}: dado para ${item.residente_apelido || item.residente_nome}.`);
+          const r2 = await api('POST', '/api/medicacao', { prescricao_id: item.id, data: dia, horario: item.horario, situacao: 'dado' });
+          if (r2.aviso_estoque) toast(r2.aviso_estoque, true);
+          else toast(`${item.medicamento}: dado para ${item.residente_apelido || item.residente_nome}.${r2.baixa ? ` Baixa no estoque: ${numEst(r2.baixa.quantidade)}.` : ''}`);
           rotear();
         });
       } else janelaMotivoDose(item, dia, bm.dataset.marcar);
@@ -178,6 +179,7 @@ function receitaItem(p) {
       <button type="button" class="btn-icone nao-imprimir" data-mais-receita="${p.id}" style="margin-left:auto;width:32px;height:32px" aria-haspopup="menu" aria-expanded="false" title="Opções" aria-label="Opções">${icone('pontos')}</button></div>
     ${p.se_necessario && p.condicao ? `<small>Quando: ${esc(p.condicao)}</small>` : ''}
     ${p.obs ? `<small>${esc(p.obs)}</small>` : ''}
+    ${p.produto_id ? `<small>${icone('pacote')} Dá baixa no estoque: <a href="#/estoque/item-${p.produto_id}">${esc(p.produto_nome)}</a> (${esc(numEst(p.qtd_por_dose))} por dose)</small>` : ''}
     <small class="fraco">${p.prescritor ? esc(p.prescritor) + ' · ' : ''}desde ${esc(dataBR(p.inicio))}${p.fim ? ' até ' + esc(dataBR(p.fim)) : ' (uso contínuo)'}${!p.ativa && p.motivo_suspensao ? ' · suspensa: ' + esc(p.motivo_suspensao) : ''}</small>
     ${avisoAlergia(p.alergia)}
   </div>`;
@@ -262,6 +264,10 @@ async function formPrescricao(p, pre = {}) {
   const novo = !p;
   let residentes;
   try { residentes = (await residentesParaBusca()).filter((r) => !inativoRes(r) || (p && r.id === p.residente_id)); } catch (e) { toast(e.message, true); return; }
+  let medicos = [], produtos = []; // sugestões: médicos cadastrados em Equipe › Profissionais; itens do estoque para dar baixa
+  try { medicos = (await api('GET', '/api/profissionais?funcao=' + encodeURIComponent('Médico'))).itens.map((m) => m.nome); } catch { /* segue sem sugestões */ }
+  try { produtos = (await api('GET', '/api/produtos')).itens.sort((a, b) => (b.categoria === 'remedio') - (a.categoria === 'remedio') || a.nome.localeCompare(b.nome, 'pt-BR')); } catch { /* segue sem estoque */ }
+  const unidadeDe = (id) => { const pr = produtos.find((x) => x.id === +id); return pr ? (UNIDADES_EST[pr.unidade] || [pr.unidade, pr.unidade])[1] : ''; };
   const v = p || { residente_id: pre.residente_id || '', medicamento: '', dose: '', via: 'Oral', horarios: '', se_necessario: 0, condicao: '', inicio: hojeIso(), fim: '', prescritor: '', obs: '' };
   const hs = String(v.horarios || '').split(',').filter(Boolean);
   const outros = hs.filter((h) => !HORARIOS_COMUNS.includes(h));
@@ -286,9 +292,15 @@ async function formPrescricao(p, pre = {}) {
     <div class="grade-campos" style="margin-top:16px">
       <label class="campo"><span>Começa em</span><input type="date" id="rxInicio"></label>
       <label class="campo"><span>Termina em</span><input type="date" id="rxFim"><span class="dica">Em branco = uso contínuo</span></label>
-      <label class="campo"><span>Médico(a)</span><input id="rxMedico" maxlength="80"></label>
+      <label class="campo"><span>Médico(a)</span><input id="rxMedico" maxlength="80" list="rxMedicos"></label>
       <label class="campo largo"><span>Observações</span><input id="rxObs" maxlength="300" placeholder="Ex.: em jejum; depois do almoço; triturar para a sonda"></label>
-    </div>${datalist('rxMeds', REMEDIOS_COMUNS)}`, {
+    </div>
+    <fieldset style="margin-top:18px"><legend>${icone('pacote')}Estoque (opcional)</legend><div class="grade-campos">
+      <label class="campo meio"><span>Dar baixa neste item do estoque</span><select id="rxProduto"><option value="">— não ligar ao estoque —</option>
+        ${produtos.map((pr) => `<option value="${pr.id}">${esc(pr.nome)} (${esc(numEst(pr.saldo))} ${esc((UNIDADES_EST[pr.unidade] || [pr.unidade, pr.unidade])[1])})</option>`).join('')}</select>
+        <span class="dica">Ao marcar “Dei”, o sistema tira do estoque sozinho. Cadastre o remédio no Estoque contado em <b>unidades</b> (comprimidos).</span></label>
+      <label class="campo"><span>Quanto sai por dose</span><input id="rxQtd" inputmode="decimal" placeholder="1"><span class="dica" id="rxQtdUn"></span></label>
+    </div></fieldset>${datalist('rxMeds', REMEDIOS_COMUNS)}${datalist('rxMedicos', medicos)}`, {
     tamanho: 'largo', sub: 'Copie exatamente como está na receita do médico.',
     rodape: `<button type="button" class="btn" data-fechar>Cancelar</button><button type="button" class="btn primario" id="rxSalvar">${icone('check')}${novo ? 'Cadastrar' : 'Salvar'}</button>`,
     onAbrir: (el) => {
@@ -297,6 +309,10 @@ async function formPrescricao(p, pre = {}) {
       $(v.se_necessario ? '#rxSos' : '#rxFixo', el).checked = true;
       $('#rxCond', el).value = v.condicao || ''; $('#rxInicio', el).value = v.inicio || hojeIso(); $('#rxFim', el).value = v.fim || '';
       $('#rxMedico', el).value = v.prescritor || ''; $('#rxObs', el).value = v.obs || '';
+      $('#rxProduto', el).value = v.produto_id || ''; $('#rxQtd', el).value = v.qtd_por_dose != null ? numEst(v.qtd_por_dose) : '';
+      const un = () => { $('#rxQtdUn', el).textContent = $('#rxProduto', el).value ? `em ${unidadeDe($('#rxProduto', el).value)}` : ''; };
+      $('#rxProduto', el).addEventListener('change', () => { if ($('#rxProduto', el).value && !$('#rxQtd', el).value) $('#rxQtd', el).value = '1'; un(); });
+      un();
       const atualizar = () => {
         const sos = $('#rxSos', el).checked;
         $('#rxHorariosCaixa', el).hidden = sos; $('#rxCondCaixa', el).hidden = !sos;
@@ -317,6 +333,7 @@ async function formPrescricao(p, pre = {}) {
       residente_id: $('#rxRes', el).value, medicamento: $('#rxMed', el).value.trim(), dose: $('#rxDose', el).value.trim(), via: $('#rxVia', el).value,
       se_necessario: sos ? 1 : 0, horarios: sos ? '' : [...new Set(horarios)].sort().join(','), condicao: sos ? $('#rxCond', el).value.trim() : '',
       inicio: $('#rxInicio', el).value, fim: $('#rxFim', el).value, prescritor: $('#rxMedico', el).value.trim(), obs: $('#rxObs', el).value.trim(),
+      produto_id: $('#rxProduto', el).value, qtd_por_dose: $('#rxProduto', el).value ? $('#rxQtd', el).value.trim() || '1' : '',
     };
     if (!corpo.residente_id) throw new Error('Escolha o residente.');
     if (!corpo.medicamento) { $('#rxMed', el).focus(); throw new Error('Escreva o nome do remédio.'); }
@@ -331,7 +348,8 @@ async function formPrescricao(p, pre = {}) {
       j.fechar(true); toast(`${corpo.medicamento} cadastrado para ${r ? r.apelido || r.nome : 'o residente'}.`);
     } else {
       delete corpo.residente_id;
-      await salvarComVersao(`/api/prescricoes/${p.id}`, corpo, { ...p, fim: p.fim || '', condicao: p.condicao || '', prescritor: p.prescritor || '', obs: p.obs || '', horarios: p.horarios || '' });
+      await salvarComVersao(`/api/prescricoes/${p.id}`, corpo, { ...p, fim: p.fim || '', condicao: p.condicao || '', prescritor: p.prescritor || '', obs: p.obs || '', horarios: p.horarios || '',
+        produto_id: p.produto_id ?? '', qtd_por_dose: p.qtd_por_dose != null ? numEst(p.qtd_por_dose) : '' });
       j.fechar(true); toast('Prescrição salva.');
     }
     if (/^#\/(prescricoes|residente\/|medicacao)/.test(location.hash)) rotear(); else location.hash = '#/prescricoes';

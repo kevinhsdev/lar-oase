@@ -131,6 +131,9 @@ TELAS.residente = async (c, id) => {
   if (!/^\d+$/.test(String(id || ''))) { location.replace('#/residentes'); return; }
   const [d, dia, ag, rx] = await Promise.all([api('GET', `/api/residentes/${id}`), api('GET', `/api/ocorrencias?residente=${id}&limite=5`),
     api('GET', `/api/agenda?residente=${id}&proximos=1&limite=6`), api('GET', `/api/prescricoes?residente=${id}`)]);
+  const [vac, sv, avs] = await Promise.all([api('GET', `/api/vacinas?residente=${id}`), api('GET', `/api/sinais?residente=${id}&dias=30`), api('GET', `/api/avaliacoes?residente=${id}`)]);
+  const ultimaAv = (k) => avs.itens.find((a) => a.escala === k);
+  const ultimaSv = sv.itens[sv.itens.length - 1];
   const r = d.residente, cs = d.contatos;
   const inativo = inativoRes(r);
   const resp = cs.find((x) => x.responsavel);
@@ -155,6 +158,7 @@ TELAS.residente = async (c, id) => {
         ${segmentado(Object.entries(d.situacoes).map(([v, rot]) => ({ v, rotulo: v === 'hospitalizado' ? 'Hospitalizado' : rot })), r.situacao, { classe: 'situacao', rotulo: 'Situação do residente' })}
         ${nota ? `<small class="mudo" style="max-width:420px;text-align:right">${esc(nota)}</small>` : ''}
         <div class="acoes"><button type="button" class="btn" id="resEditar">${icone('editar')}Editar ficha</button>
+          <a class="btn" href="#/prontuario/${r.id}" title="Tudo desta pessoa numa página, pronto para imprimir">${icone('documento')}Prontuário</a>
           <button type="button" class="btn" id="resImprimirFicha">${icone('impressora')}Imprimir</button>
           ${admin ? `<button type="button" class="btn-icone" id="resMais" aria-haspopup="menu" aria-expanded="false" title="Mais opções" aria-label="Mais opções">${icone('pontos')}</button>` : ''}</div>
       </div>
@@ -185,6 +189,30 @@ TELAS.residente = async (c, id) => {
       <div class="acoes nao-imprimir"><a class="btn peq fantasma" href="#/prescricoes/residente-${r.id}">Ver tudo</a>
       ${inativo ? '' : `<button type="button" class="btn peq" id="fichaPrescrever">${icone('mais')}Nova prescrição</button>`}</div></div>
       ${rx.itens.length ? rx.itens.map(receitaItem).join('') : '<p class="mudo">Nenhum remédio cadastrado.</p>'}
+    </section>
+    <section class="cartao espaco"><div class="cartao-topo"><h2>${icone('saude')}Sinais vitais</h2>
+      <div class="acoes nao-imprimir"><a class="btn peq fantasma" href="#/sinais/residente-${r.id}">Ver gráficos</a></div></div>
+      ${ultimaSv ? `<p><b>Última medida:</b> ${esc(dataBR(ultimaSv.data))} às ${esc(ultimaSv.hora)} — ${esc(resumoLeitura(ultimaSv))}
+        ${ultimaSv.fora.length ? `<span class="etiqueta perigo">${icone('alerta')}${esc(nomesFora(ultimaSv.fora, sv.medidas))} fora do normal</span>` : ''}</p>
+        <p class="dica" style="margin-top:6px">${plural(sv.itens.length, 'medida', 'medidas')} nos últimos 30 dias.</p>`
+        : '<p class="mudo">Nenhuma medida nos últimos 30 dias.</p>'}
+    </section>
+    <section class="cartao espaco"><div class="cartao-topo"><h2>${icone('documento')}PIA — Plano Individual de Atenção</h2>
+      <div class="acoes nao-imprimir"><a class="btn peq" href="#/pia/residente-${r.id}">Abrir o plano</a></div></div>
+      <p class="mudo">O plano de cuidado desta pessoa, por área, revisado a cada 6 meses.</p></section>
+    <section class="cartao espaco"><div class="cartao-topo"><h2>${icone('contar')}Avaliações</h2>
+      <div class="acoes nao-imprimir"><a class="btn peq fantasma" href="#/avaliacoes/residente-${r.id}">Histórico</a></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">${['katz', 'braden', 'morse'].map((k) => { const a = ultimaAv(k);
+        return a ? `<span class="pilula">${esc(avs.escalas[k].nome)}: <b>${a.pontuacao}</b> <span class="etiqueta ${a.cor}">${esc(a.classificacao)}</span> <span class="fraco">${esc(dataBR(a.data))}</span></span>`
+          : `<span class="pilula">${esc(avs.escalas[k].nome)}: <span class="fraco">não avaliado</span></span>`; }).join('')}</div>
+    </section>
+    <section class="cartao espaco"><div class="cartao-topo"><h2>${icone('escudo')}Vacinas</h2>
+      <div class="acoes nao-imprimir"><a class="btn peq fantasma" href="#/vacinas/residente-${r.id}">Cartão de vacina</a></div></div>
+      ${Object.keys(vac.situacao).length ? `<div class="pilulas" style="display:flex;flex-wrap:wrap;gap:6px">${Object.entries(vac.situacao).map(([nome, s]) => {
+        const ult = vac.itens.find((x) => x.vacina === nome);
+        return s.estado === 'em_dia' ? `<span class="pilula">${icone('check')}${esc(NOMES_CURTOS_VAC[nome] || nome)} · ${esc(dataCurta(ult && ult.data))}</span>`
+          : `<span class="etiqueta ${s.estado === 'atrasada' ? 'perigo' : 'aviso'}">${esc(NOMES_CURTOS_VAC[nome] || nome)}: ${s.estado === 'atrasada' ? 'atrasada' : 'vence ' + esc(dataCurta(s.vence))}</span>`;
+      }).join('')}</div>` : '<p class="mudo">Nenhuma vacina registrada. Copie da caderneta de vacinação.</p>'}
     </section>
     <section class="cartao espaco" id="fichaAgenda"><div class="cartao-topo"><h2>${icone('calendario')}Próximos compromissos</h2>
       <div class="acoes nao-imprimir"><a class="btn peq fantasma" href="#/agenda/residente-${r.id}">Ver tudo</a>

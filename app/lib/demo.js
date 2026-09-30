@@ -64,11 +64,306 @@ function gerarDemo(db, transacao) {
       }
     });
   });
-  gerarDemoDiario(db, transacao);
-  gerarDemoAgenda(db, transacao);
-  gerarDemoEstoque(db, transacao);
-  gerarDemoRemedios(db, transacao);
+  completarDemo(db, transacao);
   return RESIDENTES.length;
+}
+
+// Cada módulo com a sua parte fictícia. Módulo novo: acrescente aqui [nome, tabela com a coluna demo, função].
+// Quem carregou a demonstração antes de um módulo existir recebe a parte dele ao abrir o sistema (ver server.js).
+const MODULOS_DEMO = [
+  ['Diário', 'ocorrencias', gerarDemoDiario],
+  ['Agenda', 'agenda', gerarDemoAgenda],
+  ['Estoque', 'produtos', gerarDemoEstoque],
+  ['Remédios', 'prescricoes', gerarDemoRemedios],
+  ['Vacinas', 'vacinas', gerarDemoVacinas],
+  ['Equipe', 'profissionais', gerarDemoEquipe],
+  ['Patrimônio', 'patrimonio', gerarDemoPatrimonio],
+  ['Sinais vitais', 'sinais', gerarDemoSinais],
+  ['Tarefas', 'tarefas', gerarDemoTarefas],
+  ['Avaliações', 'avaliacoes', gerarDemoAvaliacoes],
+  ['PIA', 'pias', gerarDemoPia],
+  ['Financeiro', 'lancamentos', gerarDemoFinanceiro],
+];
+
+// Financeiro fictício: 6 meses de mensalidades, doações, contribuição da OASE e despesas típicas de um lar (valores inventados).
+// No mês atual: parte paga, parte em aberto e algumas atrasadas.
+function gerarDemoFinanceiro(db, transacao) {
+  const rs = db.prepare("SELECT id, nome FROM residentes WHERE demo = 1 AND situacao IN ('no_lar','hospitalizado') ORDER BY id").all();
+  const hoje = new Date();
+  const hojeIso = hoje.toLocaleDateString('sv-SE');
+  const mesDe = (n) => { const d = new Date(hoje.getFullYear(), hoje.getMonth() + n, 1, 12); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const nomes = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const varia = (s, amp) => Math.round((Math.sin(s * 12.9898) * 43758.5453 % 1) * amp);
+  const agora = new Date().toISOString();
+  const ins = db.prepare(`INSERT INTO lancamentos (tipo, categoria, descricao, valor, vencimento, pago_em, valor_pago, forma, pessoa, residente_id, competencia, criado_em, criado_por, atualizado_em, atualizado_por, demo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`);
+  const lanca = (tipo, cat, desc, valor, venc, pessoa = null, rid = null, comp = null, forma = 'Pix') => {
+    const pago = venc <= hojeIso && !(venc >= mesDe(0) + '-01' && varia(valor, 10) > 6); // no mês atual, alguns vencidos ficam sem pagar (atrasados)
+    ins.run(tipo, cat, desc, valor, venc, pago ? venc : null, pago ? valor : null, pago ? forma : null, pessoa, rid, comp, agora, 'ana.demo', agora, 'ana.demo');
+  };
+  transacao(() => {
+    rs.forEach((r, i) => db.prepare('UPDATE residentes SET mensalidade = ?, dia_vencimento = ? WHERE id = ?').run(2600 + (i % 6) * 320, i % 3 === 0 ? 5 : 10, r.id));
+    const ms = db.prepare('SELECT id, nome, mensalidade, dia_vencimento FROM residentes WHERE demo = 1 AND mensalidade > 0').all();
+    for (let n = -5; n <= 0; n++) {
+      const m = mesDe(n);
+      const nomeMes = `${nomes[Number(m.slice(5)) - 1]}/${m.slice(0, 4)}`;
+      for (const r of ms) lanca('receita', 'Mensalidade', `Mensalidade de ${nomeMes} — ${r.nome}`, r.mensalidade, `${m}-${String(r.dia_vencimento).padStart(2, '0')}`, null, r.id, m, r.id % 4 === 0 ? 'Benefício (INSS)' : 'Pix');
+      lanca('receita', 'Contribuição da OASE / igreja', `Contribuição mensal da OASE — ${nomeMes}`, 8000, `${m}-05`, 'OASE (fictícia)', null, null, 'Transferência');
+      lanca('receita', 'Doação', `Doações da comunidade — ${nomeMes}`, 1500 + Math.abs(varia(n + 7, 2500)), `${m}-15`, 'Comunidade (fictícia)', null, null, 'Pix');
+      lanca('despesa', 'Salários e encargos', `Folha de pagamento — ${nomeMes}`, 41800, `${m}-05`, 'Equipe', null, null, 'Transferência');
+      lanca('despesa', 'Alimentação', `Mercado e hortifrúti — ${nomeMes}`, 9200 + varia(n + 1, 900), `${m}-12`, 'Mercado (fictício)', null, null, 'Boleto');
+      lanca('despesa', 'Remédios e material de saúde', `Farmácia — ${nomeMes}`, 2900 + varia(n + 2, 600), `${m}-18`, 'Farmácia (fictícia)', null, null, 'Boleto');
+      lanca('despesa', 'Higiene e limpeza', `Fraldas e produtos de limpeza — ${nomeMes}`, 2600 + varia(n + 3, 400), `${m}-10`, 'Distribuidora (fictícia)', null, null, 'Boleto');
+      lanca('despesa', 'Água, luz, gás e telefone', `Contas de consumo — ${nomeMes}`, 3100 + varia(n + 4, 300), `${m}-20`, 'Concessionárias', null, null, 'Boleto');
+      lanca('despesa', 'Serviços (médico, fisioterapia…)', `Fisioterapia e nutrição — ${nomeMes}`, 3400, `${m}-25`, 'Prestadores (fictícios)', null, null, 'Pix');
+      if (n === -2) lanca('despesa', 'Manutenção e consertos', 'Conserto da máquina de lavar', 650, `${m}-22`, 'Assistência técnica (fictícia)', null, null, 'Pix');
+    }
+  });
+}
+
+// PIA fictício para a maioria dos residentes no lar (um com a revisão vencida; alguns ainda sem PIA)
+function gerarDemoPia(db, transacao) {
+  const rs = db.prepare("SELECT * FROM residentes WHERE demo = 1 AND situacao = 'no_lar' ORDER BY id").all();
+  const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const ins = db.prepare('INSERT INTO pias (residente_id, data, proxima_revisao, participantes, areas, obs, criado_em, criado_por, demo) VALUES (?,?,?,?,?,?,?,?,1)');
+  const agora = new Date().toISOString();
+  transacao(() => {
+    rs.forEach((r, i) => {
+      if (i % 4 === 3) return; // alguns ainda sem PIA (aparecem como pendentes)
+      const g = r.grau_dependencia || 'I';
+      const areas = {
+        saude: { situacao: `${r.diagnosticos || 'Sem diagnósticos registrados'}.${r.alergias ? ' ALERGIA: ' + r.alergias + '.' : ''}`,
+          metas: 'Manter as doenças controladas e os remédios nos horários certos.', acoes: 'Dar os remédios conforme a folha; aferir sinais vitais toda manhã; consulta com a geriatra a cada 3 meses.', responsavel: 'Enfermagem' },
+        nutricao: { situacao: `Dieta ${String(r.dieta || 'livre').toLowerCase()}.`, metas: g === 'III' ? 'Manter o peso e evitar engasgo.' : 'Manter alimentação variada e boa hidratação.',
+          acoes: g === 'III' ? 'Dieta pastosa; oferecer água de 2 em 2 horas; pesar toda segunda-feira.' : 'Oferecer frutas no lanche; incentivar a beber água; pesar toda segunda-feira.', responsavel: 'Nutricionista e cuidadoras' },
+        mobilidade: { situacao: `Mobilidade: ${String(r.mobilidade || 'independente').toLowerCase()}.`,
+          metas: g === 'III' ? 'Prevenir encurtamentos e manter o conforto no leito.' : 'Evitar quedas e manter a caminhada.',
+          acoes: g === 'III' ? 'Exercícios passivos no leito com a fisioterapia 3x por semana.' : 'Caminhar acompanhado(a) no jardim; fisioterapia 2x por semana; manter o quarto sem obstáculos.', responsavel: 'Fisioterapia' },
+        pele: { situacao: g === 'III' ? 'Risco alto de ferida por pressão.' : 'Pele íntegra.', metas: g === 'III' ? 'Não ter feridas por pressão.' : 'Manter a pele hidratada e íntegra.',
+          acoes: g === 'III' ? 'Mudar de posição de 2 em 2 horas; colchão pneumático; hidratar a pele após o banho; trocar a fralda sempre que preciso.' : 'Hidratar a pele após o banho; observar vermelhidões.', responsavel: 'Técnicos de enfermagem e cuidadoras' },
+        cognicao: { situacao: g === 'III' ? 'Desorientado(a) no tempo; momentos de agitação ao entardecer.' : 'Orientado(a), conversa bem.', metas: 'Manter a tranquilidade e a rotina.',
+          acoes: g === 'III' ? 'Rotina previsível; música calma ao entardecer; evitar trocas de quarto.' : 'Conversar sobre o dia; jogos de memória na oficina.', responsavel: 'Cuidadoras' },
+        social: { situacao: 'Recebe visita da família aos domingos.', metas: 'Manter o contato com a família e a comunidade.',
+          acoes: `Incentivar as visitas; chamada de vídeo quinzenal com a família;${r.religiao === 'Luterana' ? ' acompanhar ao culto de quarta.' : ' convidar para o culto e as festas.'}`, responsavel: 'Assistente social' },
+        atividades: { situacao: r.obs || 'Gosta de música e de conversar.', metas: 'Participar de atividades de que gosta.', acoes: 'Oficina de música às sextas; festa dos aniversariantes do mês.', responsavel: 'Voluntários e cuidadoras' },
+      };
+      const vencido = i === 1;
+      const data = vencido ? dia(-200) : dia(-(40 + i * 5));
+      const prox = vencido ? dia(-20) : (() => { const d = new Date(data + 'T12:00:00'); d.setDate(d.getDate() + 180); return d.toLocaleDateString('sv-SE'); })();
+      ins.run(r.id, data, prox, 'Enfermeira responsável, fisioterapeuta, assistente social, residente e família', JSON.stringify(areas), null, agora, 'ana.demo');
+    });
+  });
+}
+
+// Avaliações fictícias, coerentes com o grau de dependência de cada residente (grau III = acamado, risco de ferida alto…).
+// Alguns têm só uma avaliação antiga (aparecem como "reavaliar").
+function gerarDemoAvaliacoes(db, transacao) {
+  const { pontuar } = require('../rotas/avaliacoes');
+  const rs = db.prepare("SELECT id, grau_dependencia, mobilidade FROM residentes WHERE demo = 1 AND situacao IN ('no_lar','hospitalizado') ORDER BY id").all();
+  const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const respostas = {
+    katz: { I: [1, 1, 1, 1, 1, 1], II: [0, 0, 1, 1, 1, 1], III: [0, 0, 0, 0, 0, 1] },
+    braden: { I: [4, 4, 4, 4, 3, 3], II: [3, 3, 3, 3, 3, 2], III: [2, 2, 1, 2, 2, 1] },
+    morse: { I: [0, 15, 0, 0, 0, 0], II: [0, 15, 15, 0, 10, 0], III: [0, 15, 0, 0, 0, 15] },
+  };
+  const chaves = { katz: ['banho', 'vestir', 'banheiro', 'transferencia', 'continencia', 'alimentacao'], braden: ['percepcao', 'umidade', 'atividade', 'mobilidade', 'nutricao', 'friccao'],
+    morse: ['quedas', 'diagnosticos', 'apoio', 'soro', 'marcha', 'mental'] };
+  const ins = db.prepare('INSERT INTO avaliacoes (residente_id, escala, data, respostas, pontuacao, classificacao, obs, criado_em, criado_por, demo) VALUES (?,?,?,?,?,?,?,?,?,1)');
+  const agora = new Date().toISOString();
+  transacao(() => {
+    rs.forEach((r, i) => {
+      const g = r.grau_dependencia || 'I';
+      for (const esc of ['katz', 'braden', 'morse']) {
+        const v = [...respostas[esc][g]];
+        if (esc === 'morse' && i % 4 === 0) v[0] = 25; // caiu nos últimos 3 meses
+        const resp = Object.fromEntries(chaves[esc].map((k, j) => [k, v[j]]));
+        const { pontuacao, classificacao } = pontuar(esc, resp);
+        const velha = (i + esc.length) % 5 === 0; // só a antiga: precisa reavaliar
+        ins.run(r.id, esc, dia(-(120 + i)), JSON.stringify(resp), pontuacao, classificacao, null, agora, 'ana.demo');
+        if (!velha) ins.run(r.id, esc, dia(-(5 + i * 2)), JSON.stringify(resp), pontuacao, classificacao, esc === 'braden' && g === 'III' ? 'Mudança de decúbito de 2 em 2 horas; colchão pneumático.' : null, agora, 'ana.demo');
+      }
+    });
+  });
+}
+
+// Tarefas fictícias da equipe. [título, detalhe, prazo (dias a partir de hoje, null = sem prazo), prioridade, repetir, feita?]
+function gerarDemoTarefas(db, transacao) {
+  const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const agora = new Date().toISOString();
+  const ins = db.prepare(`INSERT INTO tarefas (titulo, detalhe, prazo, prioridade, repetir, feita, feita_em, feita_por, criado_em, criado_por, atualizado_em, atualizado_por, demo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`);
+  const itens = [
+    ['Ligar para a família do Seu Dito', 'Confirmar quem vai acompanhar na consulta do cardiologista.', 0, 'alta', null, 0],
+    ['Trocar a roupa de cama dos quartos 1 a 4', null, 0, 'normal', 'semanal', 0],
+    ['Comprar fralda geriátrica M', 'Está acabando no estoque (ver Estoque).', -2, 'alta', null, 0],
+    ['Conferir a validade dos remédios do armário', 'Separar o que vence em 30 dias.', 3, 'normal', 'mensal', 0],
+    ['Pesar os residentes', 'Anotar na ronda de sinais vitais.', (8 - new Date().getDay()) % 7 || 7, 'normal', 'semanal', 0],
+    ['Agendar o conserto da cadeira de rodas PAT-021', 'Freio direito falhando.', 1, 'normal', null, 0],
+    ['Preparar a festa dos aniversariantes do mês', 'Bolo, decoração e convite para as famílias.', 7, 'normal', null, 0],
+    ['Organizar as doações de roupas', null, null, 'normal', null, 0],
+    ['Levar a Dona Judite ao exame de sangue', null, -1, 'normal', null, 1],
+    ['Recarregar o cilindro de oxigênio', null, -3, 'alta', null, 1],
+  ];
+  transacao(() => {
+    for (const [t, det, prazo, prio, rep, feita] of itens) {
+      ins.run(t, det, prazo == null ? null : dia(prazo), prio, rep, feita, feita ? `${dia(prazo || 0)}T15:00:00.000Z` : null, feita ? 'ana.demo' : null, agora, 'ana.demo', agora, 'ana.demo');
+    }
+  });
+}
+
+// Sinais vitais fictícios: 30 dias de ronda da manhã para quem está no lar; glicemia 2x por dia para os diabéticos; peso às segundas.
+// Cada pessoa tem o seu "jeito" (hipertenso com pressão mais alta, DPOC com saturação mais baixa…), com uma variação pequena por dia.
+function gerarDemoSinais(db, transacao) {
+  const rs = db.prepare("SELECT id, nome, diagnosticos, situacao FROM residentes WHERE demo = 1 ORDER BY id").all();
+  const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const varia = (seed, amp) => Math.round(Math.sin(seed * 12.9898) * 43758.5453 % 1 * amp); // "sorteio" que dá sempre o mesmo resultado
+  const ins = db.prepare(`INSERT INTO sinais (residente_id, data, hora, pa_sist, pa_diast, temperatura, glicemia, saturacao, fc, peso, dor, obs, criado_em, criado_por, demo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`);
+  const autores = ['ana.demo', 'joana.demo', 'rita.demo', 'paulo.demo'];
+  const agoraH = new Date().getHours();
+  transacao(() => {
+    rs.forEach((r, i) => {
+      if (r.situacao !== 'no_lar') return;
+      const d = String(r.diagnosticos || '').toLowerCase();
+      const hiper = d.includes('hipertens') || d.includes('cardíaca');
+      const diab = d.includes('diabetes');
+      const dpoc = d.includes('dpoc');
+      const pesoBase = 52 + (i * 7) % 28;
+      for (let n = 29; n >= 0; n--) {
+        if (n === 0 && agoraH < 9) continue; // hoje, só se a ronda da manhã já passou
+        const s = i * 100 + n;
+        const tendencia = hiper && i % 3 === 0 ? Math.round((29 - n) * 0.8) : 0; // um hipertenso com a pressão subindo no mês
+        const sist = (hiper ? 138 : 122) + tendencia + varia(s, 14);
+        const diast = (hiper ? 86 : 76) + Math.round(tendencia / 2) + varia(s + 1, 8);
+        const temp = n === 3 && i === 6 ? 38.1 : Math.round((36.3 + varia(s + 2, 6) / 10) * 10) / 10;
+        const sat = (dpoc ? 91 : 95) + Math.abs(varia(s + 3, 3));
+        const fc = 68 + varia(s + 4, 14);
+        const peso = new Date(dia(-n) + 'T12:00:00').getDay() === 1 ? Math.round((pesoBase + varia(s + 5, 8) / 10) * 10) / 10 : null;
+        const dor = d.includes('artrite') || d.includes('artrose') ? 3 + Math.abs(varia(s + 6, 3)) : null;
+        const quando = `${dia(-n)}T08:${String(10 + (i % 40)).padStart(2, '0')}:00`;
+        ins.run(r.id, dia(-n), `08:${String(10 + (i % 40)).padStart(2, '0')}`, sist, diast, temp, diab ? 150 + varia(s + 7, 50) : null, Math.min(100, sat), fc, peso, dor,
+          temp >= 37.8 ? 'Febre: enfermagem avisada' : null, quando, autores[n % 4]);
+        if (diab && (n > 0 || agoraH >= 18)) ins.run(r.id, dia(-n), '17:30', null, null, null, 175 + varia(s + 8, 70), null, null, null, null, null, `${dia(-n)}T17:30:00`, autores[(n + 1) % 4]);
+      }
+    });
+  });
+}
+// Gera a parte fictícia dos módulos que ainda não têm nenhuma. Devolve os nomes dos que foram completados.
+function completarDemo(db, transacao) {
+  if (!db.prepare('SELECT 1 FROM residentes WHERE demo = 1 LIMIT 1').get()) return [];
+  const feitos = [];
+  for (const [nome, tabela, fn] of MODULOS_DEMO) {
+    if (db.prepare(`SELECT 1 FROM ${tabela} WHERE demo = 1 LIMIT 1`).get()) continue;
+    fn(db, transacao);
+    feitos.push(nome);
+  }
+  return feitos;
+}
+
+// Patrimônio fictício. [nome, categoria, código, local, estado, índice do residente que usa (ou null), origem, valor, próxima revisão (dias a partir de hoje)]
+const PATRIMONIO_DEMO = [
+  ['Cama hospitalar elétrica', 'Mobília e camas', 'PAT-001', 'Quarto 1', 'bom', null, 'Doação', 3200, null],
+  ['Cama hospitalar elétrica', 'Mobília e camas', 'PAT-002', 'Quarto 4', 'regular', null, 'Compra', 3500, null],
+  ['Cama hospitalar manual', 'Mobília e camas', 'PAT-003', 'Quarto 8', 'bom', null, 'Doação', 1500, null],
+  ['Colchão pneumático (anti-escaras)', 'Equipamento de saúde', 'PAT-010', 'Quarto 4', 'bom', 5, 'Compra', 450, 90],
+  ['Cadeira de rodas', 'Acessibilidade', 'PAT-020', 'Quarto 1', 'bom', 2, 'Doação', 900, null],
+  ['Cadeira de rodas', 'Acessibilidade', 'PAT-021', 'Quarto 6', 'ruim', 13, 'Empréstimo', 800, null],
+  ['Andador articulado', 'Acessibilidade', 'PAT-022', 'Quarto 1', 'bom', 0, 'Compra', 250, null],
+  ['Cadeira de banho', 'Acessibilidade', 'PAT-023', 'Banheiro ala A', 'bom', null, 'Compra', 380, null],
+  ['Concentrador de oxigênio', 'Equipamento de saúde', 'PAT-030', 'Posto de enfermagem', 'bom', null, 'Comodato', 4500, 20],
+  ['Cilindro de oxigênio (portátil)', 'Equipamento de saúde', 'PAT-031', 'Posto de enfermagem', 'bom', null, 'Comodato', null, -3],
+  ['Aparelho de pressão digital', 'Equipamento de saúde', 'PAT-032', 'Posto de enfermagem', 'bom', null, 'Compra', 220, 150],
+  ['Glicosímetro', 'Equipamento de saúde', 'PAT-033', 'Posto de enfermagem', 'bom', null, 'Doação', 90, null],
+  ['Extintor de incêndio (pó químico)', 'Segurança', 'PAT-040', 'Corredor ala A', 'bom', null, 'Compra', 180, 12],
+  ['Extintor de incêndio (água)', 'Segurança', 'PAT-041', 'Cozinha', 'bom', null, 'Compra', 160, 200],
+  ['Geladeira duplex', 'Eletrodoméstico', 'PAT-050', 'Cozinha', 'bom', null, 'Doação', 2800, null],
+  ['Fogão industrial 6 bocas', 'Cozinha', 'PAT-051', 'Cozinha', 'regular', null, 'Compra', 1900, null],
+  ['Máquina de lavar industrial', 'Lavanderia', 'PAT-060', 'Lavanderia', 'manutencao', null, 'Compra', 8900, null],
+  ['Televisão 50"', 'Eletrônico', 'PAT-070', 'Sala de convivência', 'bom', null, 'Doação', 2400, null],
+  ['Carro do lar (Spin)', 'Veículo', 'PAT-080', 'Garagem', 'bom', null, 'Doação', 45000, 25],
+];
+
+function gerarDemoPatrimonio(db, transacao) {
+  const rs = db.prepare('SELECT id FROM residentes WHERE demo = 1 ORDER BY id').all().map((r) => r.id);
+  const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const agora = new Date().toISOString();
+  const insP = db.prepare(`INSERT INTO patrimonio (nome, categoria, codigo, local, estado, residente_id, data_aquisicao, origem, valor, proxima_revisao, criado_em, criado_por, atualizado_em, atualizado_por, demo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`);
+  const insM = db.prepare('INSERT INTO manutencoes (patrimonio_id, data, tipo, descricao, custo, responsavel, criado_em, criado_por, demo) VALUES (?,?,?,?,?,?,?,?,1)');
+  transacao(() => {
+    PATRIMONIO_DEMO.forEach(([nome, cat, cod, local, estado, ri, origem, valor, rev], i) => {
+      const id = Number(insP.run(nome, cat, cod, local, estado, ri == null ? null : rs[ri], dia(-400 - i * 30), origem, valor, rev == null ? null : dia(rev), agora, 'ana.demo', agora, 'ana.demo').lastInsertRowid);
+      if (cod === 'PAT-060') insM.run(id, dia(-4), 'conserto', 'Parou de centrifugar. Técnico levou a placa para conserto; volta em 10 dias.', 650, 'Assistência técnica (fictícia)', agora, 'ana.demo');
+      if (cod === 'PAT-040') insM.run(id, dia(-353), 'revisao', 'Recarga e inspeção anual.', 60, 'Empresa de extintores (fictícia)', agora, 'ana.demo');
+      if (cod === 'PAT-080') insM.run(id, dia(-160), 'manutencao', 'Revisão dos 60 mil km, troca de óleo e filtros.', 780, 'Oficina (fictícia)', agora, 'ana.demo');
+      if (cod === 'PAT-021') insM.run(id, dia(-20), 'outro', 'Freio direito falhando. Evitar usar em rampa até o conserto.', null, null, agora, 'joana.demo');
+    });
+  });
+}
+
+// Equipe fictícia e a escala do mês. [nome, função, registro, especialidade, vínculo, na escala?, padrão da escala, deslocamento do ciclo]
+const EQUIPE_DEMO = [
+  ['Dra. Helena Siqueira', 'Médico(a)', 'CRM-SP 000001 (fictício)', 'Geriatria', 'Prestador de serviço', 0],
+  ['Dr. Mauro Tavares', 'Médico(a)', 'CRM-SP 000002 (fictício)', 'Clínica geral', 'SUS / UBS', 0],
+  ['Dra. Vânia Rocha', 'Médico(a)', 'CRM-SP 000003 (fictício)', 'Geriatria', 'Prestador de serviço', 0],
+  ['Cláudia Menezes', 'Enfermeiro(a)', 'COREN-SP 000010 (fictício)', 'Responsável técnica', 'Funcionário', 1, '5x2_manha', 0],
+  ['Ana Prado', 'Técnico(a) de enfermagem', 'COREN-SP 000011 (fictício)', null, 'Funcionário', 1, '12x36_dia', 0],
+  ['Joana Lima', 'Técnico(a) de enfermagem', 'COREN-SP 000012 (fictício)', null, 'Funcionário', 1, '12x36_dia', 1],
+  ['Rita Souza', 'Cuidador(a)', null, null, 'Funcionário', 1, '12x36_dia', 0],
+  ['Paulo Nunes', 'Cuidador(a)', null, null, 'Funcionário', 1, '12x36_dia', 1],
+  ['Sônia Araújo', 'Cuidador(a)', null, null, 'Funcionário', 1, '12x36_noite', 0],
+  ['Marta Ribeiro', 'Cuidador(a)', null, null, 'Funcionário', 1, '12x36_noite', 1],
+  ['Lúcia Campos', 'Cozinha', null, null, 'Funcionário', 1, '6x1_manha', 0],
+  ['Teresa Gomes', 'Limpeza', null, null, 'Funcionário', 1, '6x1_tarde', 3],
+  ['Fábio Martins', 'Fisioterapeuta', 'CREFITO 000020 (fictício)', 'Geriatria', 'Prestador de serviço', 0],
+  ['Beatriz Costa', 'Nutricionista', 'CRN 000030 (fictício)', null, 'Prestador de serviço', 0],
+  ['Irmã Gertrudes', 'Voluntário(a)', null, 'Culto e visitas', 'Voluntário', 0],
+];
+
+function gerarDemoEquipe(db, transacao) {
+  const agora = new Date().toISOString();
+  const hojeD = new Date();
+  const ini = new Date(hojeD.getFullYear(), hojeD.getMonth() - 1, 1, 12); // do mês passado até o fim do próximo
+  const fim = new Date(hojeD.getFullYear(), hojeD.getMonth() + 2, 0, 12);
+  const insP = db.prepare(`INSERT INTO profissionais (nome, funcao, registro, especialidade, telefone, vinculo, na_escala, criado_em, criado_por, atualizado_em, atualizado_por, demo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`);
+  const insE = db.prepare('INSERT INTO escala (profissional_id, data, codigo, criado_em, criado_por, demo) VALUES (?,?,?,?,?,1)');
+  const ciclos = { '12x36_dia': ['D', 'F'], '12x36_noite': ['NN', 'F'], '6x1_manha': ['M', 'M', 'M', 'M', 'M', 'M', 'F'], '6x1_tarde': ['T', 'T', 'T', 'T', 'T', 'T', 'F'] };
+  transacao(() => {
+    EQUIPE_DEMO.forEach(([nome, funcao, registro, esp, vinculo, naEscala, padrao, desloc], i) => {
+      const id = Number(insP.run(nome, funcao, registro, esp, `(11) 90000-${String(200 + i).padStart(4, '0')}`, vinculo, naEscala, agora, 'ana.demo', agora, 'ana.demo').lastInsertRowid);
+      if (!padrao) return;
+      let n = desloc;
+      for (let d = new Date(ini); d <= fim; d.setDate(d.getDate() + 1), n++) {
+        const iso = d.toLocaleDateString('sv-SE');
+        let codigo = padrao === '5x2_manha' ? ([0, 6].includes(d.getDay()) ? 'F' : 'M') : ciclos[padrao][n % ciclos[padrao].length];
+        if (nome === 'Rita Souza' && d.getDate() >= 10 && d.getDate() <= 12 && d.getMonth() === hojeD.getMonth()) codigo = 'AT';
+        insE.run(id, iso, codigo, agora, 'ana.demo');
+      }
+    });
+  });
+}
+
+// Vacinas fictícias: campanha da gripe deste ano (quase todos), Covid (alguns atrasados), pneumocócica, dT (alguns vencidos) e hepatite B em andamento
+function gerarDemoVacinas(db, transacao) {
+  const rs = db.prepare("SELECT id FROM residentes WHERE demo = 1 AND situacao IN ('no_lar','hospitalizado') ORDER BY id").all().map((r) => r.id);
+  const hojeD = new Date().toLocaleDateString('sv-SE');
+  const ano = hojeD >= `${new Date().getFullYear()}-04-20` ? new Date().getFullYear() : new Date().getFullYear() - 1; // última campanha que já aconteceu
+  const dia = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const ins = db.prepare(`INSERT INTO vacinas (residente_id, vacina, dose, data, lote, local, aplicador, proxima_dose, obs, criado_em, criado_por, atualizado_em, atualizado_por, demo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)`);
+  const agora = new Date().toISOString();
+  const v = (rid, vacina, dose, data, local, proxima = null, obs = null) => ins.run(rid, vacina, dose, data, `DEMO${(rid * 37) % 900 + 100}`, local, 'Equipe da UBS (fictícia)', proxima, obs, agora, 'ana.demo', agora, 'ana.demo');
+  transacao(() => {
+    rs.forEach((rid, i) => {
+      if (i % 6 !== 5) v(rid, 'Influenza (gripe)', 'Dose anual', `${ano}-04-${String(10 + (i % 3)).padStart(2, '0')}`, 'No lar — campanha', null, 'Campanha da gripe: a UBS vacinou no próprio lar');
+      v(rid, 'Influenza (gripe)', 'Dose anual', `${ano - 1}-04-15`, 'No lar — campanha');
+      v(rid, 'Covid-19', 'Reforço', dia(i % 4 === 0 ? -210 : -(100 + i * 4)), 'UBS Centro (fictícia)');
+      if (i % 2 === 0) v(rid, 'Pneumocócica 23 (pneumonia)', 'Dose única', `${ano - 3}-08-20`, 'UBS Centro (fictícia)');
+      v(rid, 'Dupla adulto dT (difteria e tétano)', 'Reforço', i % 5 === 0 ? `${ano - 11}-03-02` : `${ano - 4}-06-18`, 'UBS Centro (fictícia)');
+      if (i % 4 === 1) v(rid, 'Hepatite B', '2ª dose', dia(-150), 'UBS Centro (fictícia)', dia(i === 1 ? -5 : 20), 'Falta a 3ª dose');
+    });
+  });
 }
 
 // Prescrições fictícias (índice do residente em RESIDENTES). Respeitam as alergias da demonstração (ex.: Dona Aurora não toma dipirona).
@@ -132,6 +427,15 @@ function gerarDemoRemedios(db, transacao) {
         }
       }
     });
+    // Remédios ligados ao estoque (em comprimidos): dar o remédio dá baixa sozinho. A metformina está no fim (aviso "dá para 5 dias").
+    const agoraIso = new Date().toISOString();
+    const insProd = db.prepare(`INSERT INTO produtos (nome, categoria, unidade, estoque_minimo, local, criado_em, criado_por, atualizado_em, atualizado_por, demo) VALUES (?,'remedio','un',?, 'Armário de remédios', ?, 'ana.demo', ?, 'ana.demo', 1)`);
+    const insMov = db.prepare(`INSERT INTO movimentos (produto_id, data, tipo, quantidade, validade, origem, obs, criado_em, criado_por, demo) VALUES (?,?,'entrada',?,?,?,?,?, 'ana.demo', 1)`);
+    for (const [nome, remedio, qtd, min, origem] of [['Losartana 50 mg (comprimido)', 'Losartana 50 mg', 48, 20, 'SUS / Farmácia Popular'], ['Metformina 850 mg (comprimido)', 'Metformina 850 mg', 10, 14, 'Família do residente']]) {
+      const prod = Number(insProd.run(nome, min, agoraIso, agoraIso).lastInsertRowid);
+      insMov.run(prod, dia(-2), qtd, dia(320), origem, 'Estoque atual (demonstração)', agoraIso);
+      db.prepare('UPDATE prescricoes SET produto_id = ?, qtd_por_dose = 1 WHERE medicamento = ? AND demo = 1').run(prod, remedio);
+    }
   });
 }
 
@@ -278,4 +582,4 @@ function gerarDemoDiario(db, transacao) {
   });
 }
 
-module.exports = { gerarDemo };
+module.exports = { gerarDemo, completarDemo, MODULOS_DEMO };

@@ -107,7 +107,9 @@ async function configGeral(c) {
         <div class="rodape-cartao acoes"><button type="button" class="btn primario" id="cfgBloqueioSalvar">Salvar</button></div></section>
       <section class="cartao largo"><div class="cartao-topo"><h2>${icone('estrela')}Demonstração</h2></div>
         ${d.demo ? `<div class="estado-grande"><span class="ic-caixa">${icone('check')}</span><div><b>A demonstração está carregada</b><span class="mudo">Os residentes que aparecem são fictícios. Apague antes de começar a usar de verdade.</span></div></div>
-          <div class="rodape-cartao acoes"><button type="button" class="btn perigo" id="demoApagar">${icone('lixo')}Apagar a demonstração</button></div>`
+          <div class="rodape-cartao acoes"><button type="button" class="btn" id="demoCompletar">${icone('estrela')}Completar a demonstração</button>
+            <button type="button" class="btn perigo" id="demoApagar">${icone('lixo')}Apagar a demonstração</button></div>
+          <p class="dica" style="margin-top:8px">“Completar” acrescenta os dados fictícios dos módulos que ainda estiverem vazios (Diário, Remédios, Vacinas, Equipe…).</p>`
         : d.reais ? `<p class="mudo">Já existem ${plural(d.reais, 'residente real', 'residentes reais')} cadastrados, então a demonstração não pode ser carregada (os dados fictícios não se misturam com os de verdade).</p>`
           : `<p class="mudo">Carrega residentes e familiares <b>fictícios</b> para conhecer o sistema e treinar a equipe sem medo de errar. Depois é só apagar.</p>
           <div class="rodape-cartao acoes"><button type="button" class="btn primario" id="demoCarregar">${icone('estrela')}Carregar a demonstração</button></div>`}
@@ -125,6 +127,10 @@ async function configGeral(c) {
     esquecerResidentes();
     toast(`Demonstração carregada: ${r.residentes} residentes fictícios.`);
     location.hash = '#/residentes';
+  });
+  if ($('#demoCompletar', c)) $('#demoCompletar', c).onclick = (e) => botaoOcupado(e.currentTarget, async () => {
+    const r = await api('POST', '/api/admin/demo');
+    toast(r.completados && r.completados.length ? `Demonstração completada: ${r.completados.join(', ')}.` : 'A demonstração já estava completa.');
   });
   if ($('#demoApagar', c)) $('#demoApagar', c).onclick = async (e) => {
     if (!(await confirmar('Apagar todos os residentes e familiares fictícios da demonstração? Os dados reais (se houver) não são tocados.', 'Apagar demonstração', { perigo: true }))) return;

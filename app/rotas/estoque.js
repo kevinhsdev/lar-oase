@@ -48,8 +48,16 @@ module.exports = function estoque(ctx) {
 
   function comSituacao(p) {
     const c = calcular(movimentosDe(p.id));
-    const acabando = p.estoque_minimo != null && c.saldo <= p.estoque_minimo;
-    return { ...p, ...c, acabando, zerado: c.saldo <= 0, alerta: c.vencido > 0 || c.vencendo > 0 || acabando };
+    // Remédios ligados a prescrições: quanto sai por dia e para quantos dias ainda dá
+    const consumo = consumoDiario(p.id);
+    const dias = consumo > 0 ? Math.floor(c.saldo / consumo) : null;
+    const acabando = (p.estoque_minimo != null && c.saldo <= p.estoque_minimo) || (dias != null && dias < 7);
+    return { ...p, ...c, consumo_dia: consumo || null, dias_restantes: dias, acabando, zerado: c.saldo <= 0, alerta: c.vencido > 0 || c.vencendo > 0 || acabando };
+  }
+  function consumoDiario(produtoId) {
+    return db.prepare(`SELECT p.qtd_por_dose, p.horarios FROM prescricoes p JOIN residentes r ON r.id = p.residente_id
+      WHERE p.produto_id = ? AND p.ativa = 1 AND p.se_necessario = 0 AND (p.fim IS NULL OR p.fim >= ?) AND r.situacao = 'no_lar'`).all(produtoId, hoje())
+      .reduce((s, x) => s + (x.qtd_por_dose || 0) * String(x.horarios || '').split(',').filter(Boolean).length, 0);
   }
   const listar = (onde = 'p.ativo = 1') => db.prepare(`SELECT p.*, r.nome residente_nome, r.apelido residente_apelido FROM produtos p
       LEFT JOIN residentes r ON r.id = p.residente_id WHERE ${onde} ORDER BY p.nome COLLATE NOCASE`).all().map(comSituacao);

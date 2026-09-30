@@ -105,6 +105,49 @@ CREATE TABLE IF NOT EXISTS administracoes (
 CREATE INDEX IF NOT EXISTS administracoes_data ON administracoes(data, prescricao_id);
 -- Um horário marcado só uma vez por dia (o "se necessário", sem horário, pode ser dado várias vezes)
 CREATE UNIQUE INDEX IF NOT EXISTS administracoes_unica ON administracoes(prescricao_id, data, horario) WHERE horario IS NOT NULL;
+
+-- Vacinas (cartão de vacina de cada residente). proxima_dose = quando tomar a próxima (se o posto informou).
+CREATE TABLE IF NOT EXISTS vacinas (
+  id INTEGER PRIMARY KEY, residente_id INTEGER NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  vacina TEXT NOT NULL, dose TEXT, data TEXT NOT NULL, lote TEXT, local TEXT, aplicador TEXT, proxima_dose TEXT, obs TEXT,
+  criado_em TEXT, criado_por TEXT, atualizado_em TEXT, atualizado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS vacinas_residente ON vacinas(residente_id, data);
+
+-- Equipe: profissionais do lar e de fora (corpo clínico: médicos, enfermagem, fisioterapia…) e a escala de turnos.
+CREATE TABLE IF NOT EXISTS profissionais (
+  id INTEGER PRIMARY KEY, nome TEXT NOT NULL, funcao TEXT NOT NULL, registro TEXT, especialidade TEXT, telefone TEXT, email TEXT,
+  vinculo TEXT NOT NULL DEFAULT 'Funcionário', na_escala INTEGER NOT NULL DEFAULT 1, ativo INTEGER NOT NULL DEFAULT 1, obs TEXT,
+  criado_em TEXT, criado_por TEXT, atualizado_em TEXT, atualizado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+-- Um código por pessoa por dia: M, T, N (turnos), D (12 h de dia), NN (12 h de noite), F (folga), FE (férias), AT (atestado)
+CREATE TABLE IF NOT EXISTS escala (
+  id INTEGER PRIMARY KEY, profissional_id INTEGER NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
+  data TEXT NOT NULL, codigo TEXT NOT NULL, obs TEXT, criado_em TEXT, criado_por TEXT, demo INTEGER NOT NULL DEFAULT 0,
+  UNIQUE (profissional_id, data)
+);
+CREATE INDEX IF NOT EXISTS escala_data ON escala(data);
+
+-- Patrimônio: camas, cadeiras de rodas, eletrodomésticos, extintores… onde estão, estado e manutenções.
+CREATE TABLE IF NOT EXISTS patrimonio (
+  id INTEGER PRIMARY KEY, nome TEXT NOT NULL, categoria TEXT NOT NULL, codigo TEXT, local TEXT,
+  estado TEXT NOT NULL DEFAULT 'bom' CHECK (estado IN ('bom','regular','ruim','manutencao','baixado')),
+  residente_id INTEGER REFERENCES residentes(id) ON DELETE SET NULL, data_aquisicao TEXT, origem TEXT, valor REAL,
+  garantia_ate TEXT, proxima_revisao TEXT, obs TEXT,
+  criado_em TEXT, criado_por TEXT, atualizado_em TEXT, atualizado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+-- Sinais vitais (a "ronda": pressão, temperatura, glicemia, saturação, batimentos, peso e dor de 0 a 10)
+CREATE TABLE IF NOT EXISTS sinais (
+  id INTEGER PRIMARY KEY, residente_id INTEGER NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  data TEXT NOT NULL, hora TEXT NOT NULL, pa_sist INTEGER, pa_diast INTEGER, temperatura REAL, glicemia INTEGER,
+  saturacao INTEGER, fc INTEGER, peso REAL, dor INTEGER, obs TEXT, criado_em TEXT, criado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS sinais_residente ON sinais(residente_id, data);
+CREATE TABLE IF NOT EXISTS manutencoes (
+  id INTEGER PRIMARY KEY, patrimonio_id INTEGER NOT NULL REFERENCES patrimonio(id) ON DELETE CASCADE,
+  data TEXT NOT NULL, tipo TEXT NOT NULL, descricao TEXT NOT NULL, custo REAL, responsavel TEXT,
+  criado_em TEXT, criado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
 `);
 
 // Colunas novas numa tabela que já existe: acrescente aqui (CREATE TABLE IF NOT EXISTS não mexe em tabela pronta).
@@ -113,6 +156,45 @@ function colunaNova(tabela, coluna, tipo) {
   const tem = db.prepare(`PRAGMA table_info(${tabela})`).all().some((c) => c.name === coluna);
   if (!tem) db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${tipo}`);
 }
+// 0.11.0: remédio ligado a um item do estoque (dar o remédio dá baixa sozinho)
+colunaNova('prescricoes', 'produto_id', 'INTEGER REFERENCES produtos(id) ON DELETE SET NULL');
+colunaNova('prescricoes', 'qtd_por_dose', 'REAL');
+colunaNova('administracoes', 'movimento_id', 'INTEGER');
+// 0.12.0: compromissos que se repetem (mesma "serie") e tarefas da equipe
+colunaNova('agenda', 'serie', 'TEXT');
+db.exec(`CREATE TABLE IF NOT EXISTS tarefas (
+  id INTEGER PRIMARY KEY, titulo TEXT NOT NULL, detalhe TEXT, responsavel TEXT, prazo TEXT,
+  prioridade TEXT NOT NULL DEFAULT 'normal' CHECK (prioridade IN ('normal','alta')),
+  repetir TEXT CHECK (repetir IN ('diaria','semanal','mensal')), residente_id INTEGER REFERENCES residentes(id) ON DELETE SET NULL,
+  feita INTEGER NOT NULL DEFAULT 0, feita_em TEXT, feita_por TEXT,
+  criado_em TEXT, criado_por TEXT, atualizado_em TEXT, atualizado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS tarefas_prazo ON tarefas(feita, prazo);
+-- 0.13.0: escalas de avaliação (Katz, Braden, Morse). respostas = JSON com o valor escolhido em cada item.
+CREATE TABLE IF NOT EXISTS avaliacoes (
+  id INTEGER PRIMARY KEY, residente_id INTEGER NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  escala TEXT NOT NULL, data TEXT NOT NULL, respostas TEXT NOT NULL, pontuacao INTEGER NOT NULL, classificacao TEXT NOT NULL, obs TEXT,
+  criado_em TEXT, criado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS avaliacoes_residente ON avaliacoes(residente_id, escala, data);
+-- 0.14.0: PIA (Plano Individual de Atenção). Cada revisão é uma linha nova (a mais recente vale). areas = JSON por área.
+CREATE TABLE IF NOT EXISTS pias (
+  id INTEGER PRIMARY KEY, residente_id INTEGER NOT NULL REFERENCES residentes(id) ON DELETE CASCADE,
+  data TEXT NOT NULL, proxima_revisao TEXT, participantes TEXT, areas TEXT NOT NULL, obs TEXT,
+  criado_em TEXT, criado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS pias_residente ON pias(residente_id, data);
+-- 0.16.0: Financeiro (só a administração). Receitas e despesas; mensalidade = receita com residente e competência (AAAA-MM).
+CREATE TABLE IF NOT EXISTS lancamentos (
+  id INTEGER PRIMARY KEY, tipo TEXT NOT NULL CHECK (tipo IN ('receita','despesa')), categoria TEXT NOT NULL, descricao TEXT NOT NULL,
+  valor REAL NOT NULL, vencimento TEXT NOT NULL, pago_em TEXT, valor_pago REAL, forma TEXT, pessoa TEXT,
+  residente_id INTEGER REFERENCES residentes(id) ON DELETE SET NULL, competencia TEXT, obs TEXT,
+  criado_em TEXT, criado_por TEXT, atualizado_em TEXT, atualizado_por TEXT, demo INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS lancamentos_venc ON lancamentos(vencimento);
+CREATE UNIQUE INDEX IF NOT EXISTS lancamentos_mensalidade ON lancamentos(residente_id, competencia) WHERE competencia IS NOT NULL;`);
+colunaNova('residentes', 'mensalidade', 'REAL');
+colunaNova('residentes', 'dia_vencimento', 'INTEGER');
 
 function hashSenha(senha) {
   const sal = crypto.randomBytes(16).toString('hex');

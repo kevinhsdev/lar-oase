@@ -5,7 +5,7 @@
 
 // Precisa ser igual ao VERSAO de app/lib/versao.js. Se o navegador carregar telas novas
 // enquanto a janela preta ainda roda o servidor antigo, o app avisa em vez de dar erro feio.
-const VERSAO = '0.6.0';
+const VERSAO = '0.16.1';
 // Nome do sistema ("OASE - Lar", pedido do Kevin em 30/09/2026). Para trocar: aqui, no <title> do index.html e no title do "Iniciar Sistema.bat".
 const NOME_APP = 'OASE';
 const SUBTITULO_APP = 'Lar';
@@ -488,6 +488,8 @@ const ICONES = {
   mensagem: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
   termometro: '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
   humor: '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',
+  dinheiro: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  cracha: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h2M15 12h2M6 16c.5-1.5 1.7-2 3-2s2.5.5 3 2"/>',
   pacote: '<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
   pilula: '<path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/>',
   gota: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7Z"/>',
@@ -634,12 +636,15 @@ async function sair() {
 // Para um módulo novo: acrescente a tela aqui (num grupo existente ou num grupo novo com um ícone de ICONES).
 const GRUPOS = [
   { id: 'inicio', nome: 'Início', icone: 'inicio', telas: [{ rota: 'inicio', nome: 'Início' }] },
-  { id: 'residentes', nome: 'Residentes', icone: 'residentes', telas: [{ rota: 'residentes', nome: 'Residentes' }] },
+  { id: 'residentes', nome: 'Residentes', icone: 'residentes', telas: [{ rota: 'residentes', nome: 'Residentes' }, { rota: 'pia', nome: 'PIA' }] },
   { id: 'diario', nome: 'Diário', icone: 'caderno', telas: [{ rota: 'diario', nome: 'Diário' }] },
   // A ordem importa no celular: os 4 primeiros ficam na barra de baixo, o resto vai para "Mais"
-  { id: 'remedios', nome: 'Remédios', icone: 'pilula', telas: [{ rota: 'medicacao', nome: 'Remédios de hoje' }, { rota: 'prescricoes', nome: 'Prescrições' }] },
-  { id: 'agenda', nome: 'Agenda', icone: 'calendario', telas: [{ rota: 'agenda', nome: 'Agenda' }] },
-  { id: 'estoque', nome: 'Estoque', icone: 'pacote', telas: [{ rota: 'estoque', nome: 'Estoque' }] },
+  { id: 'saude', nome: 'Saúde', icone: 'saude', telas: [{ rota: 'medicacao', nome: 'Remédios de hoje' }, { rota: 'prescricoes', nome: 'Prescrições' }, { rota: 'sinais', nome: 'Sinais vitais' }, { rota: 'avaliacoes', nome: 'Avaliações' }, { rota: 'vacinas', nome: 'Vacinas' }] },
+  { id: 'agenda', nome: 'Agenda', icone: 'calendario', telas: [{ rota: 'agenda', nome: 'Agenda' }, { rota: 'tarefas', nome: 'Tarefas' }] },
+  { id: 'estoque', nome: 'Estoque', icone: 'pacote', telas: [{ rota: 'estoque', nome: 'Estoque' }, { rota: 'patrimonio', nome: 'Patrimônio' }] },
+  { id: 'equipe', nome: 'Equipe', icone: 'cracha', telas: [{ rota: 'escala', nome: 'Escala' }, { rota: 'profissionais', nome: 'Profissionais' }] },
+  // Financeiro: só a administração vê (e o servidor também só responde para a administração)
+  { id: 'financeiro', nome: 'Financeiro', icone: 'dinheiro', admin: true, telas: [{ rota: 'financeiro', nome: 'Resumo' }, { rota: 'lancamentos', nome: 'Contas' }, { rota: 'mensalidades', nome: 'Mensalidades' }] },
   {
     id: 'config', nome: 'Configurações', icone: 'config', admin: true, telas: [
       { rota: 'config', arg: 'geral', nome: 'Geral' },
@@ -652,7 +657,7 @@ const GRUPOS = [
   },
 ];
 // Telas "filhas" (a ficha de um residente acende o grupo Residentes)
-const ROTA_PAI = { residente: 'residentes' };
+const ROTA_PAI = { residente: 'residentes', prontuario: 'residentes', recibo: 'financeiro' };
 // (Remédios tem duas abas: "medicacao" = folha do dia, "prescricoes" = o que cada um toma)
 const gruposVisiveis = () => GRUPOS.filter((g) => !g.admin || (EU && EU.perfil === 'admin'));
 const grupoDaRota = (rota) => { const r = ROTA_PAI[rota] || rota; return gruposVisiveis().find((g) => g.telas.some((t) => t.rota === r)); };
@@ -856,7 +861,7 @@ async function iniciar() {
   // Contador amarelo do Diário: ocorrências de atenção/grave ainda não resolvidas
   api('GET', '/api/ocorrencias/resumo').then((r) => definirBadge('diario', r.pendentes)).catch(() => { /* só o contador */ });
   api('GET', '/api/estoque/alertas').then((r) => definirBadge('estoque', r.total)).catch(() => { /* só o contador */ });
-  api('GET', '/api/medicacao/resumo').then((r) => definirBadge('remedios', r.atrasado)).catch(() => { /* só o contador */ });
+  api('GET', '/api/medicacao/resumo').then((r) => definirBadge('saude', r.atrasado)).catch(() => { /* só o contador */ });
   if (!location.hash || location.hash === '#' || location.hash === '#/') location.replace('#/inicio');
   await rotear();
   if (EU.bloqueada) mostrarBloqueio();
@@ -867,17 +872,20 @@ const saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom d
 const primeiroNome = (n) => String(n || '').trim().split(/\s+/)[0];
 
 TELAS.inicio = async (c) => {
-  const [d, est, med] = await Promise.all([api('GET', '/api/inicio'), api('GET', '/api/estoque/alertas'), api('GET', '/api/medicacao/resumo')]);
+  const [d, est, med, vacs, plantao, tfs] = await Promise.all([api('GET', '/api/inicio'), api('GET', '/api/estoque/alertas'), api('GET', '/api/medicacao/resumo'),
+    api('GET', '/api/vacinas/painel'), api('GET', '/api/escala/hoje'), api('GET', '/api/tarefas?minhas=1')]);
+  const tarefasHoje = tfs.itens.filter((t) => !t.feita && t.prazo && t.prazo <= hojeIso());
   const s = d.porSituacao;
   definirBadge('estoque', est.total);
-  definirBadge('remedios', med.atrasado);
+  definirBadge('saude', med.atrasado);
   const medFeitos = med.dado + med.recusado + med.nao_dado;
   const atuais = (s.no_lar || 0) + (s.hospitalizado || 0);
   const total = Object.values(s).reduce((a, b) => a + b, 0);
   definirBadge('residentes', s.hospitalizado || 0);
   const hoje = new Date();
   const admin = EU.perfil === 'admin';
-  const quando = (r) => (r.dias === 0 ? 'hoje!' : r.dias === 1 ? 'amanhã' : `em ${r.dias} dias`);
+  const ANIV_NO_INICIO = 4; // só os mais próximos: a lista completa fica na ficha de cada um
+  const quando = (r) => (r.dias === 0 ? 'Hoje!' : r.dias === 1 ? 'Amanhã' : `Em ${r.dias} dias`);
   c.innerHTML = `
     <div class="cabecalho"><div>
       <h1>${saudacao()}, ${esc(primeiroNome(EU.nome))}</h1>
@@ -893,11 +901,6 @@ TELAS.inicio = async (c) => {
       <a class="numero neutro" href="#/residentes/todos"><span class="ic-caixa">${icone('documento')}</span><b>${total}</b><span>Fichas no sistema</span></a>
     </div>
     <div class="grade-2">
-      <section class="cartao"><div class="cartao-topo"><h2>${icone('bolo')}Próximos aniversários</h2></div>
-        ${d.aniversarios.length ? `<div class="aniversarios" id="anivInicio">${d.aniversarios.map((r) => `<a class="aniv${r.dias === 0 ? ' hoje' : ''}" href="#/residente/${r.id}">${avatar(r.nome)}
-          <span class="meio"><b>${esc(r.apelido || r.nome)}</b><small>faz ${r.faz} anos · ${esc(dataExtenso(r.data))}</small><small class="${r.dias <= 1 ? 'destaque-aniv' : ''}">${quando(r)}</small></span></a>`).join('')}</div>`
-          : vazio('bolo', 'Nenhum aniversário nos próximos 30 dias', 'Quando chegar perto, eles aparecem aqui.')}
-      </section>
       <div class="pilha">
         ${d.atencao_total ? `<section class="cartao" style="border-color:var(--aviso-suave)"><div class="cartao-topo"><h2>${icone('alerta')}Precisa de atenção</h2>
           <a class="btn peq fantasma" href="#/diario/atencao">Ver ${d.atencao_total > d.atencao.length ? `as ${d.atencao_total}` : 'e resolver'}</a></div>
@@ -907,6 +910,23 @@ TELAS.inicio = async (c) => {
         ${med.total ? `<section class="cartao"${med.atrasado ? ' style="border-color:var(--aviso-suave)"' : ''}><div class="cartao-topo"><h2>${icone('pilula')}Remédios de hoje</h2><a class="btn peq fantasma" href="#/medicacao">Abrir a folha</a></div>
           <div class="progresso-dia">${barraEst({ saldo: medFeitos, estoque_minimo: med.total / 2.5, zerado: false, acabando: false, unidade: 'un' })}
             <span class="mudo"><b>${medFeitos}</b> de <b>${med.total}</b> marcados${med.atrasado ? ` · <b style="color:var(--aviso)">${plural(med.atrasado, 'atrasado', 'atrasados')}</b>` : ''}</span></div></section>` : ''}
+        ${vacs.avisos ? `<section class="cartao"><div class="cartao-topo"><h2>${icone('escudo')}Vacinas</h2><a class="btn peq fantasma" href="#/vacinas/avisos">Ver</a></div>
+          <p class="mudo"><b>${plural(vacs.avisos, 'dose atrasada ou vencendo', 'doses atrasadas ou vencendo')}</b> · gripe ${esc(vacs.campanha.ano)}: ${vacs.campanha.vacinados} de ${vacs.campanha.total} vacinados.</p></section>` : ''}
+        ${tarefasHoje.length ? `<section class="cartao"><div class="cartao-topo"><h2>${icone('check')}Minhas tarefas de hoje</h2><a class="btn peq fantasma" href="#/tarefas/minhas">Abrir</a></div>
+          <div class="linhas">${tarefasHoje.slice(0, 5).map((t) => `<a class="linha" href="#/tarefas/minhas"><span class="meio"><b>${esc(t.titulo)}</b><small>${t.prazo < hojeIso() ? 'Atrasada desde ' + esc(dataBR(t.prazo)) : 'Hoje'}${t.responsavel ? '' : ' · equipe toda'}</small></span>
+            ${t.prioridade === 'alta' ? '<span class="etiqueta perigo">Urgente</span>' : ''}</a>`).join('')}</div></section>` : ''}
+        <section class="cartao"><div class="cartao-topo"><h2>${icone('caderno')}Diário de hoje</h2><a class="btn peq fantasma" href="#/diario">Abrir</a></div>
+          <p class="mudo">${d.diario_hoje ? `${plural(d.diario_hoje, 'anotação', 'anotações')} até agora.` : 'Nada anotado hoje ainda.'} Anote a evolução e tudo o que fugir da rotina.</p></section>
+        <section class="cartao"><div class="cartao-topo"><h2>${icone('hospital')}Hospitalizados agora</h2></div>
+          ${d.hospitalizados.length ? `<div class="linhas">${d.hospitalizados.map((r) => `<a class="linha" href="#/residente/${r.id}">${avatar(r.nome, 'p')}<span class="meio"><b>${esc(r.nome)}</b>
+            <small>${r.situacao_desde ? `desde ${esc(dataBR(r.situacao_desde))} (${esc(tempoDesde(r.situacao_desde))})` : ''}${r.situacao_obs ? ' · ' + esc(r.situacao_obs) : ''}</small></span>${icone('seta')}</a>`).join('')}</div>`
+            : `<p class="mudo">Ninguém hospitalizado no momento.</p>`}
+        </section>
+      </div>
+      <div class="pilha">
+        ${plantao.itens.length ? `<section class="cartao"><div class="cartao-topo"><h2>${icone('cracha')}No plantão hoje</h2><a class="btn peq fantasma" href="#/escala">Escala</a></div>
+          <div class="linhas">${plantao.itens.map((p) => `<div class="linha">${avatar(p.nome, 'p')}<span class="meio"><b>${esc(p.nome)}</b><small>${esc(p.funcao)}</small></span>
+            <span class="etiqueta" data-cod="${esc(p.codigo)}">${esc(plantao.codigos[p.codigo].nome)}</span></div>`).join('')}</div></section>` : ''}
         <section class="cartao"><div class="cartao-topo"><h2>${icone('calendario')}Agenda de hoje e amanhã</h2><a class="btn peq fantasma" href="#/agenda">Abrir</a></div>
           ${d.agenda.length ? `<div class="linhas">${d.agenda.map((a) => `<a class="linha" href="#/agenda">${a.residente_id ? avatar(a.residente_nome || '?', 'p') : `<span class="avatar p">${icone('pessoaCasa')}</span>`}
             <span class="meio"><b>${esc(a.titulo)}</b><small>${a.data === hojeIso() ? 'Hoje' : 'Amanhã'}${a.hora ? ' às ' + esc(a.hora) : ''} · ${esc(a.residente_apelido || a.residente_nome || 'Todo o lar')}${a.local ? ' · ' + esc(a.local) : ''}</small></span>${icone('seta')}</a>`).join('')}</div>`
@@ -916,13 +936,11 @@ TELAS.inicio = async (c) => {
             <small>${p.zerado ? 'Acabou' : p.acabando ? `Acabando: sobra${p.saldo === 1 ? '' : 'm'} ${esc(String(p.saldo).replace('.', ','))}` : `Tem ${esc(String(p.saldo).replace('.', ','))}`}${
             p.vencido > 0 ? ' · tem item vencido' : p.vencendo > 0 && p.proxima_validade ? ` · vence em ${esc(dataBR(p.proxima_validade))}` : ''}</small></span>
             <span class="etiqueta ${p.zerado || p.vencido > 0 ? 'perigo' : 'aviso'}">${p.zerado ? 'Acabou' : p.vencido > 0 ? 'Vencido' : p.acabando ? 'Acabando' : 'Vencendo'}</span></a>`).join('')}</div></section>` : ''}
-        <section class="cartao"><div class="cartao-topo"><h2>${icone('caderno')}Diário de hoje</h2><a class="btn peq fantasma" href="#/diario">Abrir</a></div>
-          <p class="mudo">${d.diario_hoje ? `${plural(d.diario_hoje, 'anotação', 'anotações')} até agora.` : 'Nada anotado hoje ainda.'} Anote a evolução e tudo o que fugir da rotina.</p></section>
-        <section class="cartao"><div class="cartao-topo"><h2>${icone('hospital')}Hospitalizados agora</h2></div>
-          ${d.hospitalizados.length ? `<div class="linhas">${d.hospitalizados.map((r) => `<a class="linha" href="#/residente/${r.id}">${avatar(r.nome, 'p')}<span class="meio"><b>${esc(r.nome)}</b>
-            <small>${r.situacao_desde ? `desde ${esc(dataBR(r.situacao_desde))} (${esc(tempoDesde(r.situacao_desde))})` : ''}${r.situacao_obs ? ' · ' + esc(r.situacao_obs) : ''}</small></span>${icone('seta')}</a>`).join('')}</div>`
-            : `<p class="mudo">Ninguém hospitalizado no momento.</p>`}
-        </section>
+        ${d.aniversarios.length ? `<section class="cartao"><div class="cartao-topo"><h2>${icone('bolo')}Próximos aniversários</h2></div>
+          <div class="linhas" id="anivInicio">${d.aniversarios.slice(0, ANIV_NO_INICIO).map((r) => `<a class="linha" href="#/residente/${r.id}">${avatar(r.nome, 'p')}
+            <span class="meio"><b>${esc(r.apelido || r.nome)}</b><small>faz ${r.faz} anos · ${esc(dataExtenso(r.data))}</small></span>
+            <span class="etiqueta${r.dias <= 1 ? ' acento' : ''}">${quando(r)}</span></a>`).join('')}</div>
+          ${d.aniversarios.length > ANIV_NO_INICIO ? `<p class="mudo" style="margin-top:10px;font-size:13px">E mais ${d.aniversarios.length - ANIV_NO_INICIO} nos próximos 30 dias.</p>` : ''}</section>` : ''}
         <section class="cartao"><div class="cartao-topo"><h2>${icone('pessoaCasa')}Chegaram por último</h2><a class="btn peq fantasma" href="#/residentes">Ver todos</a></div>
           ${d.recentes.length ? `<div class="linhas">${d.recentes.map((r) => `<a class="linha" href="#/residente/${r.id}">${avatar(r.nome, 'p')}<span class="meio"><b>${esc(r.nome)}</b>
             <small>chegou em ${esc(dataBR(r.dt_entrada))} · ${esc(tempoDesde(r.dt_entrada))}${r.quarto ? ' · quarto ' + esc(r.quarto) : ''}</small></span>${icone('seta')}</a>`).join('')}</div>`
@@ -936,7 +954,6 @@ TELAS.inicio = async (c) => {
   if ($('#inicioAnotar', c)) $('#inicioAnotar', c).onclick = () => formRegistro(null);
   definirBadge('diario', d.atencao_total);
   if ($('#numerosInicio', c)) cascata($('#numerosInicio', c));
-  if ($('#anivInicio', c)) cascata($('#anivInicio', c));
 };
 
 document.addEventListener('DOMContentLoaded', () => { ligarAtalhos(); iniciar(); });

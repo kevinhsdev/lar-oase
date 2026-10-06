@@ -87,6 +87,34 @@ TELAS.medicacao = async (c, arg) => {
         <div class="acoes nao-imprimir"><button type="button" class="btn peq" data-dar-sos="${p.id}">${icone('check')}Dar agora</button></div></div>`).join('')}</section>` : ''}`;
 
   $('#remImprimir', c).onclick = () => window.print();
+  let visRem = d.itens;
+  // Papel: a folha de administração (MAR). O que já foi marcado sai com quem deu e a hora; o que falta sai com quadrinhos para marcar à mão.
+  definirImpressao(() => {
+    const horarios = [...new Set(visRem.map((i) => i.horario))];
+    const situacao = (i) => {
+      const a = i.adm;
+      if (!a) return '<span class="doc-nw"><span class="doc-quadro"></span>Dado</span> <span class="doc-nw"><span class="doc-quadro"></span>Recusou</span> <span class="doc-nw"><span class="doc-quadro"></span>Não dado</span><small>Hora: ______</small>';
+      return `<b>${esc(SIT_DOSE[a.situacao])}</b>${a.hora_real ? ' às ' + esc(a.hora_real) : ''}<small>${esc(nomeAutorDia({ autor_nome: a.autor_nome, criado_por: a.criado_por }))}${a.motivo ? ' — ' + esc(a.motivo) : ''}</small>`;
+    };
+    const filtros = [turno !== 'todos' ? 'turno da ' + TURNOS_DIA[turno].toLowerCase() : '', soFalta ? 'só o que falta' : '', buscaRem.trim() ? `busca: “${buscaRem.trim()}”` : ''].filter(Boolean).join(' · ');
+    return {
+      titulo: 'Folha de administração de medicamentos', paisagem: true,
+      sub: `${nomeDia(dia)} de ${dia.slice(0, 4)} · ${marcados} de ${r.total} doses marcadas${filtros ? ' · ' + filtros : ''}`,
+      corpo: docSecao('Remédios com horário', docTabela([{ t: 'Residente', w: '19%' }, { t: 'Quarto', w: '6%' }, { t: 'Medicamento', w: '19%' }, { t: 'Dose', w: '11%' },
+        { t: 'Via', w: '8%' }, { t: 'Orientação', w: '15%' }, { t: 'Administração', w: '15%' }, { t: 'Rubrica', w: '7%' }],
+      horarios.flatMap((h) => [{ grupo: `${h} · ${plural(visRem.filter((i) => i.horario === h).length, 'dose', 'doses')}` },
+        ...visRem.filter((i) => i.horario === h).map((i) => [`<b>${esc(i.residente_nome)}</b>${i.alergia ? `<small>${docMarca('Alergia: ' + i.alergia)}</small>` : ''}`,
+          esc(i.residente_quarto || ''), `<b>${esc(i.medicamento)}</b>`, esc(i.dose), esc(i.via), esc(i.obs || ''), situacao(i), ''])]),
+      { classe: 'grade', vazio: 'Nenhum remédio com horário neste filtro.' }))
+        + (d.sos.length ? docSecao('Se necessário (sem horário fixo)', docTabela([{ t: 'Residente', w: '19%' }, { t: 'Medicamento', w: '19%' }, { t: 'Dose', w: '11%' }, { t: 'Via', w: '8%' },
+          { t: 'Quando dar', w: '22%' }, { t: 'Dado neste dia', w: '21%' }],
+        d.sos.map((p) => [`<b>${esc(p.residente_nome)}</b>`, `<b>${esc(p.medicamento)}</b>`, esc(p.dose), esc(p.via), esc(p.condicao || ''),
+          p.dadas.length ? p.dadas.map((a) => `${esc(a.hora_real || '—')} · ${esc(nomeAutorDia({ autor_nome: a.autor_nome, criado_por: a.criado_por }))}${a.motivo ? ' — ' + esc(a.motivo) : ''}`).join('<br>') : '']),
+        { classe: 'grade' })) : '')
+        + docNota('Marque cada dose na hora em que for dada e rubrique. Recusa ou dose não dada: anote o motivo e avise a enfermagem.')
+        + docAssinaturas(['Enfermagem — conferência', 'Responsável técnico(a)']),
+    };
+  });
   if (!r.total && !d.sos.length) return;
   const lista = $('#remLista', c);
   const desenhar = () => {
@@ -94,6 +122,7 @@ TELAS.medicacao = async (c, arg) => {
     const q = norm(buscaRem.trim());
     const vis = d.itens.filter((i) => (turno === 'todos' || i.turno === turno) && (!soFalta || !i.adm)
       && (!q || norm([i.residente_nome, i.residente_apelido, i.medicamento, i.residente_quarto ? 'quarto ' + i.residente_quarto : ''].join(' ')).includes(q)));
+    visRem = vis;
     const horarios = [...new Set(vis.map((i) => i.horario))];
     lista.innerHTML = vis.length ? horarios.map((h) => {
       const os = vis.filter((i) => i.horario === h);
@@ -170,6 +199,17 @@ function janelaMotivoDose(item, dia, situacao) {
 }
 
 // ───────────── prescrições ─────────────
+// Remédios em tabela para o papel (ficha, prescrições, prontuário)
+function docTabelaRemedios(itens, { comSituacao = false } = {}) {
+  return docTabela([{ t: 'Medicamento', w: '24%' }, { t: 'Dose', w: '13%' }, { t: 'Via', w: '10%' }, { t: 'Quando', w: '19%' }, { t: 'Prescrito por / período', w: comSituacao ? '22%' : '34%' },
+    ...(comSituacao ? [{ t: 'Situação', w: '12%' }] : [])],
+  itens.map((p) => { const parou = !p.ativa || (p.fim && p.fim < hojeIso());
+    return { classe: parou ? 'apagada' : '', celulas: [`<b>${esc(p.medicamento)}</b>${p.obs ? `<small>${esc(p.obs)}</small>` : ''}`, esc(p.dose), esc(p.via),
+      p.se_necessario ? `Se necessário${p.condicao ? `<small>${esc(p.condicao)}</small>` : ''}` : esc(String(p.horarios || '').replace(/,/g, ' · ')),
+      `${esc(p.prescritor || '')}<small>desde ${esc(dataBR(p.inicio))}${p.fim ? ' até ' + esc(dataBR(p.fim)) : ' · uso contínuo'}</small>`,
+      ...(comSituacao ? [!p.ativa ? `Suspensa${p.motivo_suspensao ? `<small>${esc(p.motivo_suspensao)}</small>` : ''}` : parou ? 'Terminou' : 'Em uso'] : [])] }; }),
+  { vazio: 'Nenhum remédio em uso.' });
+}
 function receitaItem(p) {
   const suspensa = !p.ativa || (p.fim && p.fim < hojeIso());
   return `<div class="receita${suspensa ? ' suspensa' : ''}" data-receita="${p.id}">
@@ -225,9 +265,18 @@ TELAS.prescricoes = async (c, arg) => {
     <div class="faixa nao-imprimir">${icone('info')}<span>Cadastre exatamente como está na receita do médico. Para <b>mudar dose ou horário</b>, suspenda a prescrição antiga e cadastre uma nova: assim o histórico fica certo.</span></div>
     <div id="preLista"></div>`;
   const lista = $('#preLista', c);
+  let blocosVis = [...grupos.entries()];
+  definirImpressao(() => ({
+    titulo: modoResidente ? 'Prescrições do residente' : 'Prescrições em uso',
+    sub: modoResidente ? `${nomeRes || ''} · todas, inclusive suspensas e terminadas` : `${plural(blocosVis.reduce((s, [, ps]) => s + ps.length, 0), 'prescrição', 'prescrições')} · ${plural(blocosVis.length, 'residente', 'residentes')}${todas ? ' · inclui suspensas e terminadas' : ''}`,
+    corpo: blocosVis.length ? blocosVis.map(([, ps]) => docSecao(ps[0].residente_nome + (ps[0].residente_quarto ? ` — quarto ${ps[0].residente_quarto}` : ''),
+      (ps[0].residente_alergias ? docAlerta(`<b>Alergias:</b> ${esc(ps[0].residente_alergias)}`) : '') + docTabelaRemedios(ps, { comSituacao: modoResidente || todas }))).join('')
+      : '<p class="doc-nada">Nenhuma prescrição.</p>',
+  }));
   const desenhar = (q = '') => {
     const nq = norm(q.trim());
     const blocos = [...grupos.entries()].filter(([, ps]) => !nq || norm([ps[0].residente_nome, ps[0].residente_apelido, ...ps.map((p) => p.medicamento)].join(' ')).includes(nq));
+    blocosVis = blocos;
     lista.innerHTML = blocos.length ? blocos.map(([rid, ps]) => `<section class="cartao espaco"><div class="cartao-topo"><h2>${avatar(ps[0].residente_nome, 'p')}<a href="#/residente/${rid}" style="color:inherit">${esc(ps[0].residente_nome)}</a></h2>
         ${ps[0].residente_alergias ? `<span class="etiqueta perigo">${icone('alerta')}Alergia: ${esc(ps[0].residente_alergias)}</span>` : ''}</div>
         ${ps.map(receitaItem).join('')}

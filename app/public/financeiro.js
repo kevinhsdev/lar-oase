@@ -110,6 +110,24 @@ TELAS.financeiro = async (c, arg) => {
         <tr class="total"><td>Resultado (receitas − despesas)</td><td class="num" style="color:${saldo < 0 ? 'var(--perigo)' : 'var(--ok)'}">${esc(reais(saldo))}</td></tr>
       </tbody></table>` : '<p class="mudo">Nenhum pagamento registrado neste mês.</p>'}</section>`;
   $('#finImprimir', c).onclick = () => window.print();
+  definirImpressao(() => {
+    const contas = (lista) => docTabela([{ t: 'Vencimento', w: '14%' }, { t: 'Descrição', w: '42%' }, { t: 'Categoria', w: '22%' }, { t: 'Valor', w: '22%', a: 'dir' }],
+      lista.map((l) => [esc(dataBR(l.vencimento)), esc(l.descricao), esc(l.categoria), `${l.tipo === 'receita' ? '+' : '−'} ${esc(reais(l.valor))}`]), { vazio: 'Nenhuma.' });
+    const linhasCat = (tipo, nome) => [{ grupo: nome }, ...d.categorias[tipo].map((x) => [esc(x.categoria), esc(reais(x.total))]),
+      { classe: 'subtotal', celulas: [`<b>Total de ${nome.toLowerCase()}</b>`, `<b>${esc(reais(totalCat(d.categorias[tipo])))}</b>`] }];
+    return {
+      titulo: 'Demonstrativo financeiro mensal', sub: `${nomeMesFin(mes)} · regime de caixa (pela data do pagamento)`,
+      corpo: docNumeros([['Receitas do mês', reais(d.receitas)], ['Despesas do mês', reais(d.despesas)], ['Resultado do mês', reais(saldo)], ['A receber', reais(d.a_receber)], ['A pagar', reais(d.a_pagar)]])
+        + docSecao('Resultado por categoria', docTabela([{ t: 'Categoria', w: '70%' }, { t: 'Valor', w: '30%', a: 'dir' }],
+          d.categorias.receita.length || d.categorias.despesa.length ? [...linhasCat('receita', 'Receitas'), ...linhasCat('despesa', 'Despesas')] : [],
+          { vazio: 'Nenhum pagamento registrado neste mês.', rodape: `<tr><td>Resultado (receitas − despesas)</td><td class="dir">${esc(reais(saldo))}</td></tr>` }), 'junta')
+        + docSecao('Últimos 6 meses', docTabela([{ t: 'Mês', w: '34%' }, { t: 'Receitas', w: '22%', a: 'dir' }, { t: 'Despesas', w: '22%', a: 'dir' }, { t: 'Resultado', w: '22%', a: 'dir' }],
+          d.meses.map((m) => [esc(nomeMesFin(m.mes)), esc(reais(m.receitas)), esc(reais(m.despesas)), esc(reais(m.receitas - m.despesas))])), 'junta')
+        + (d.atrasados.length ? docSecao(`Contas atrasadas (${d.atrasados.length})`, contas(d.atrasados), 'junta') : '')
+        + docSecao('Vencem nos próximos 7 dias', contas(d.proximos), 'junta')
+        + docAssinaturas(['Tesouraria', 'Direção']),
+    };
+  });
   $('#finNovo', c).onclick = () => formLancamento(null);
   ligarDicasBarras(c);
   c.addEventListener('click', (e) => { const b = e.target.closest('[data-pagar]'); if (b) janelaPagar(+b.dataset.pagar); });
@@ -145,6 +163,23 @@ TELAS.lancamentos = async (c, arg) => {
   ligarSegmentado($('.fSit', c), (v) => { filtroSitFin = v; desenhar(); });
   $('#lcNovo', c).onclick = () => formLancamento(null);
   $('#lcImprimir', c).onclick = () => window.print();
+  definirImpressao(() => {
+    const v = vis();
+    const tot = (t) => v.filter((l) => l.tipo === t).reduce((s, l) => s + l.valor, 0);
+    const situacao = (l) => (l.situacao === 'pago' ? `${l.tipo === 'receita' ? 'Recebido' : 'Pago'} em ${esc(dataBR(l.pago_em))}${l.forma ? `<small>${esc(l.forma)}${l.valor_pago && l.valor_pago !== l.valor ? ' · ' + esc(reais(l.valor_pago)) : ''}</small>` : ''}`
+      : l.situacao === 'atrasado' ? docMarca('Atrasado') : 'Em aberto');
+    const filtros = [{ todos: '', receita: 'só receitas', despesa: 'só despesas' }[filtroTipoFin], { todos: '', aberto: 'em aberto', atrasado: 'atrasadas', pago: 'pagas' }[filtroSitFin]].filter(Boolean).join(' · ');
+    return {
+      titulo: 'Relação de contas', sub: `Vencimento em ${nomeMesFin(mes).toLowerCase()} · ${plural(v.length, 'conta', 'contas')}${filtros ? ' · ' + filtros : ''}`,
+      corpo: docTabela([{ t: 'Vencimento', w: '11%' }, { t: 'Descrição', w: '29%' }, { t: 'Categoria', w: '16%' }, { t: 'Tipo', w: '9%' }, { t: 'Valor', w: '14%', a: 'dir' }, { t: 'Situação', w: '21%' }],
+        v.map((l) => [esc(dataBR(l.vencimento)), `<b>${esc(l.descricao)}</b>${l.pessoa || l.residente_nome ? `<small>${esc(l.pessoa || l.residente_nome)}</small>` : ''}`, esc(l.categoria),
+          l.tipo === 'receita' ? 'Receita' : 'Despesa', `${l.tipo === 'receita' ? '+' : '−'} ${esc(reais(l.valor))}`, situacao(l)]),
+        { vazio: 'Nenhuma conta neste filtro.', rodape: `<tr><td colspan="4">Total de receitas</td><td class="dir">+ ${esc(reais(tot('receita')))}</td><td></td></tr>
+          <tr><td colspan="4">Total de despesas</td><td class="dir">− ${esc(reais(tot('despesa')))}</td><td></td></tr>
+          <tr><td colspan="4">Diferença</td><td class="dir">${esc(reais(tot('receita') - tot('despesa')))}</td><td></td></tr>` })
+        + docAssinaturas(['Tesouraria', 'Direção']),
+    };
+  });
   lista.addEventListener('click', (e) => {
     const b = e.target.closest('[data-pagar]');
     if (b) return janelaPagar(+b.dataset.pagar);
@@ -253,6 +288,16 @@ TELAS.mensalidades = async (c, arg) => {
           <button type="button" class="btn peq fantasma" data-valor="${l.id}">${l.mensalidade ? 'Mudar valor' : 'Definir valor'}</button></td></tr>`).join('')}
     </tbody></table></div>`;
   $('#mnImprimir', c).onclick = () => window.print();
+  definirImpressao(() => ({
+    titulo: 'Controle de mensalidades', sub: `${nomeMesFin(mes)} · recebido ${reais(recebido)} de ${reais(previsto)} previstos`,
+    corpo: docTabela([{ t: 'Residente', w: '30%' }, { t: 'Mensalidade', w: '15%', a: 'dir' }, { t: 'Vence dia', w: '10%', a: 'centro' }, { t: 'Situação no mês', w: '20%' }, { t: 'Valor recebido', w: '13%', a: 'dir' }, { t: 'Forma', w: '12%' }],
+      d.linhas.map((l) => { const cb = l.cobranca;
+        return [`<b>${esc(l.nome)}</b>`, l.mensalidade ? esc(reais(l.mensalidade)) : '', l.dia_vencimento ? String(l.dia_vencimento) : '',
+          !cb ? (l.mensalidade ? 'Não gerada' : '') : cb.situacao === 'pago' ? `Recebida em ${esc(dataBR(cb.pago_em))}` : cb.situacao === 'atrasado' ? docMarca('Atrasada') : 'Em aberto',
+          cb && cb.situacao === 'pago' ? esc(reais(cb.valor_pago || cb.valor)) : '', cb && cb.situacao === 'pago' ? esc(cb.forma || '') : '']; }),
+      { vazio: 'Nenhum residente.', rodape: `<tr><td>Total</td><td class="dir">${esc(reais(previsto))}</td><td></td><td></td><td class="dir">${esc(reais(recebido))}</td><td></td></tr>` })
+      + docAssinaturas(['Tesouraria', 'Direção']),
+  }));
   if ($('#mnGerar', c)) $('#mnGerar', c).onclick = (e) => botaoOcupado(e.currentTarget, async () => { const r = await api('POST', '/api/mensalidades/gerar', { mes }); toast(`${plural(r.geradas, 'mensalidade gerada', 'mensalidades geradas')}.`); rotear(); });
   c.addEventListener('click', (e) => {
     const b = e.target.closest('[data-pagar]');
@@ -285,7 +330,7 @@ TELAS.recibo = async (c, id) => {
     <a class="voltar nao-imprimir" href="#/lancamentos/${esc(l.vencimento.slice(0, 7))}">${icone('voltar')}Contas</a>
     <div class="acoes nao-imprimir" style="justify-content:flex-end;margin-bottom:14px"><button type="button" class="btn primario" id="rcImprimir">${icone('impressora')}Imprimir o recibo</button></div>
     <section class="cartao recibo">
-      <div class="cab-recibo"><div class="selo-recibo">${MARCA_SVG}<div><b>${esc(org)}</b><br><small class="fraco">${esc(DESCRICAO_APP)}</small></div></div>
+      <div class="cab-recibo"><div class="selo-recibo"><img src="logo-casa.svg" alt="" width="64"><div><b>${esc(org)}</b><br><small class="fraco">${esc(DESCRICAO_APP)}</small>${EU.config.cnpj ? `<br><small class="fraco">CNPJ ${esc(EU.config.cnpj)}</small>` : ''}</div></div>
         <div style="text-align:right"><h2>RECIBO</h2><small class="fraco">Nº ${String(l.id).padStart(6, '0')}</small></div></div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:18px"><span class="valor-grande">${esc(reais(valor))}</span></div>
       <p>Recebemos de <b>${esc(quem)}</b> a importância de <b>${esc(reais(valor))}</b> (${esc(porExtenso(valor))}), referente a <b>${esc(l.descricao)}</b>${l.forma ? `, paga em <b>${esc(l.forma.toLowerCase())}</b>` : ''}.</p>
@@ -294,4 +339,12 @@ TELAS.recibo = async (c, id) => {
       <div class="assinatura"><span>${esc(org)}</span></div>
     </section>`;
   $('#rcImprimir', c).onclick = () => window.print();
+  // Papel: duas vias na mesma folha (uma fica com quem pagou, a outra com o lar), com linha de corte no meio
+  const via = (nome) => `<section class="doc-recibo">${docTimbre()}<div class="doc-recibo-cab"><div><h2>Recibo</h2><small>Nº ${String(l.id).padStart(6, '0')} · ${esc(nome)}</small></div>
+      <b class="doc-recibo-valor">${esc(reais(valor))}</b></div>
+    <p>Recebemos de <b>${esc(quem)}</b> a importância de <b>${esc(reais(valor))}</b> (${esc(porExtenso(valor))}), referente a <b>${esc(l.descricao)}</b>${l.forma ? `, paga em <b>${esc(l.forma.toLowerCase())}</b>` : ''}.</p>
+    <p>Para clareza, firmamos o presente recibo.</p>
+    <p class="doc-recibo-data">${esc(dataExtenso(l.pago_em, true))}.</p>
+    ${docAssinaturas([org])}</section>`;
+  definirImpressao(() => ({ titulo: 'Recibo', sub: `Nº ${String(l.id).padStart(6, '0')} · ${l.descricao}`, semCabecalho: true, corpo: via('1ª via — pagador') + '<div class="doc-corte">corte aqui</div>' + via('2ª via — lar') }));
 };

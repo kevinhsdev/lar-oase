@@ -19,13 +19,13 @@
   Secretaria IEL (`..\secretaria-iel`) vieram só as peças de "motor": `lib/backup.js`, `lib/atualizacao.js`, `rotas/backup.js`,
   `rotas/atualizacao.js`, `public/qr.js`, as fontes e `ferramentas/instalar-node.ps1` (renomeados para o LAR).
 - Nome: **OASE - Lar** (`NOME_APP` "OASE", `SUBTITULO_APP` "Lar" — pedido do Kevin em 30/09; antes era "LAR — Lar OASE"). Fica em `app/public/app.js` → `NOME_APP`/`SUBTITULO_APP`/`DESCRICAO_APP`, no `<title>`
-  do `app/public/index.html` e no `title` do `Iniciar Sistema.bat`. **Logo (0.4.0):** o **símbolo da OASE** (torre, cruz e globo),
-  **redesenhado em vetor** a partir de um print do site da OASE que o Kevin copiou (o print tinha fundo texturizado e ficaria borrado pequeno).
-  Versão compacta de traço grosso em `MARCA_SVG` (app.js, cores pelo CSS `.logo-oase` / `--oase` vinho #8e1b2f sobre `--selo-fundo`)
-  e em `public/icone.svg` (aba do navegador). Se vier o arquivo oficial da logo, dá para trocar mantendo os mesmos lugares.
-  **No menu lateral** (pedido do Kevin): a logo é **PNG de fundo transparente**, sem o quadrado branco — `public/logo.png` (vinho, tema
-  claro) e `public/logo-escuro.png` (vinho claro, tema escuro), trocadas pelo CSS `.selo-png`. Geradas por `node ferramentas\gerar-icone.mjs`.
-  A tela de entrada continua com o símbolo sobre o azulejo branco (`MARCA_SVG`).
+  do `app/public/index.html` e no `title` do `Iniciar Sistema.bat`. **Logo (0.18.2 — logo nova, enviada pelo Kevin em 06/10/2026):**
+  casa laranja (#ff7900) com árvore verde (#28a809) e o casal na mão, arquivo original `Logo em alta.png` (pasta do projeto).
+  Vetorizada por `node ferramentas\vetorizar-logo.mjs "Logo em alta.png"`, que gera: `public/logo-oase.svg` (completa, com o nome),
+  `public/logo-casa.svg` (só o desenho) e `public/icone.svg` (desenho num azulejo branco). Depois, `node ferramentas\gerar-icone.mjs`
+  gera `icone.ico`/`icone-256.png` (atalho) e `ferramentas\criar-atalho.ps1` refaz o atalho.
+  Onde aparece: **menu lateral** só o desenho (`MARCA_LOGO` em app.js) com o nome "OASE" em texto embaixo (pedido do Kevin), tela de
+  entrada, recibo, cabeçalho de todos os documentos impressos, aba do navegador e atalho. (A logo antiga — torre vinho — foi retirada.)
   Nome oficial: Ordem Auxiliadora **de** Senhoras Evangélicas.
 - **Sobre a OASE** (texto que o Kevin trouxe, 30/09): é um setor de trabalho da **IECLB** (Igreja Evangélica de Confissão Luterana no
   Brasil) — mulheres que participam da comunidade em "comunhão, testemunho e serviço". Desde o começo (Rio Claro/SP, 1899; nome OASE
@@ -46,7 +46,7 @@
 | LGPD | Dados reais **nunca** vão para o GitHub. Testes com a **demonstração fictícia**, em banco temporário. A demonstração **não tem CPF** e usa telefones `(11) 90000-00xx`. |
 | Entrega | Um módulo por vez, cada um testado (`node ferramentas\testar-telas.mjs`) antes do próximo. |
 
-## 3. O que já existe (versão 0.16.1)
+## 3. O que já existe (versão 0.18.2)
 
 - **Entrada** com usuário e senha (5 erros = espera 1 minuto), **troca obrigatória** da senha inicial (com barra de força),
   trocar senha pelo menu da conta.
@@ -70,6 +70,12 @@
     **Histórico da ficha** (quem fez o quê) e impressão da ficha.
   - **Situação** (no lar / hospitalizado / saiu / faleceu) num seletor colorido; mudar pede a data e o motivo. Quem sai ou
     falece continua com a ficha (filtro Histórico). **Excluir** só a administração (com aviso para preferir mudar a situação).
+  - **Foto** (0.17.0): clicar no avatar da ficha abre a janela da foto (escolher/trocar/remover; no celular tira na hora).
+    O navegador recorta o quadrado do meio e diminui para **JPEG de 512 px** (~40 KB) antes de mandar (`prepararFoto`).
+    Fica **dentro do banco**, na tabela `fotos` (BLOB), para entrar sozinha no backup (cifrado, se tiver senha) — por isso
+    **não** precisa de MySQL nem de pasta de fotos. Rotas `GET/PUT/DELETE /api/residentes/:id/foto`; a lista e a ficha trazem
+    `foto_em`, que vai no `?v=` da imagem (o navegador guarda e só baixa de novo quando trocar). `avatarRes(r)` mostra a foto
+    ou as iniciais; usado na lista, nos cartões, na ficha e na prévia de Editar. Os outros módulos ainda usam só as iniciais.
   - **LGPD:** tabela `acessos` anota quem abriu cada ficha.
 - **Diário** (módulo 2, 0.3.0 — o "Diário de Equipe + evolução + alertas" do Gerifácil):
   - Linha do tempo **por dia e por turno** (Manhã 6h–12h59, Tarde 13h–18h59, Noite 19h–5h59 — **provisório**, confirmar os plantões),
@@ -182,20 +188,49 @@
   **QR Code**), **Atualizações** (pelo Git, com cópia antes) e **Auditoria** (filtro por pessoa/ação/residente).
 - **Aviso de edição simultânea** (`salvarComVersao` + `conferirVersao`) e **aviso de versão** (telas e servidor diferentes).
 - **Demonstração** fictícia: 18 residentes (14 no lar, 2 hospitalizados, 1 saiu, 1 faleceu) com 1 a 3 familiares cada.
+- **Impressão formal** (0.18.0, `public/impressao.js`): o papel **não é mais a tela "fotografada"**. Cada tela com "Imprimir" monta um
+  **documento próprio** em A4: cabeçalho timbrado (selo da OASE, nome do lar, emitido em/por), título, tabelas com linhas finas (o
+  cabeçalho da tabela repete em cada página), campos em caixinhas, faixas de seção, linhas de assinatura e **rodapé em todas as páginas**
+  ("Lar · documento" à esquerda, "Página X de Y" à direita — `@page` do app.css lê a variável `--doc-rodape`).
+  - Como funciona: a tela chama `definirImpressao(() => ({ titulo, sub, paisagem, semCabecalho, corpo }))`. A função roda no
+    `beforeprint` (botão Imprimir **ou Ctrl+P**), então usa o filtro/busca do momento. `rotear()` limpa o documento ao trocar de tela.
+    Tela sem documento imprime a própria tela (CSS "reserva" no fim do app.css).
+  - Ajudantes: `docSecao`, `docCampos(pares, colunas)`, `docTabela(colunas, linhas, { classe: 'grade'|'compacta', rodape })` (linha
+    `{ grupo: 'texto' }` = faixa de agrupamento; classe `grade` = papel para preencher à mão, casa vazia fica em branco), `docAssinaturas`,
+    `docAlerta`, `docNota`, `docNumeros`, `docMarca` (aviso sem depender de cor), `docTimbre`. Reaproveitáveis: `docIdentResidente`,
+    `docTabelaContatos`, `docFichaResidente` (residentes.js), `docTabelaRemedios` (remedios.js), `docTabelaDiario` (diario.js),
+    `docResumoSinais`/`docTabelaLeituras` (sinais.js).
+  - Documentos: Relação de residentes, Ficha do residente, Prontuário, PIA (com 3 assinaturas), Diário (livro de ocorrências por turno,
+    assinatura de cada turno), **Folha de administração de medicamentos** (paisagem; o que falta sai com quadrinhos Dado/Recusou/Não dado,
+    hora e rubrica), Prescrições, **Ronda de sinais vitais** (paisagem; quem falta sai em branco para anotar), Sinais do residente (resumo +
+    todas as medidas), Quadro de avaliações, Histórico de avaliações, Situação vacinal, Cartão de vacinação, Agenda, Tarefas (quadrinho),
+    Inventário do estoque (coluna "Contagem"), Ficha de estoque, Inventário patrimonial (coluna "Conferido"), **Escala do mês** (paisagem,
+    31 dias numa folha), Quadro de profissionais, Demonstrativo financeiro, Relação de contas, Controle de mensalidades e **Recibo em 2 vias**
+    (uma folha, linha de corte).
+  - Cores do papel: tokens `--doc-*` no `:root` (nunca mudam no modo escuro); sai bem em impressora preto e branco.
+  - Cabeçalho (`docTimbre`): `logo-casa.svg` **embutida no HTML** (buscada uma vez ao abrir; `<img>` poderia sair em branco porque o
+    documento é montado na hora de imprimir), nome do lar, "Ordem Auxiliadora…" e o **CNPJ** (`config.cnpj`, padrão 60.761.657/0001-01,
+    validado em `cnpjValido` no server.js). Logo trocada? `node ferramentasetorizar-logo.mjs "arquivo.png"` (PNG de 2 cores em fundo branco).
+  - **Conferir o visual:** `node ferramentas\imprimir-telas.mjs [nome]` gera um PDF A4 de cada documento em `ferramentas\prints\pdf`
+    (servidor de teste na porta 3997, só demonstração, apagado no fim). Documento novo: acrescente na lista `DOCUMENTOS` dessa ferramenta.
+    O `testar-telas.mjs` confere que todo documento monta sem erro.
 
 ## 4. Arquitetura
 
 ```
 novo-sistema/
-├─ Iniciar Sistema.bat        → baixa o Node (1ª vez) e sobe o servidor em http://localhost:3000 (reinicia sozinho com código 90). Só ASCII, CRLF.
+├─ Iniciar Sistema.bat        → baixa o Node (1ª vez) e sobe o servidor em http://localhost:3001 (reinicia sozinho com código 90). Só ASCII, CRLF.
 ├─ CLAUDE.md / HANDOFF.md / README.md / LEIA-ME.txt / PROMPT-PRIMEIRO-CHAT.md
 ├─ .gitignore                 → protege dados/, *.db, backups, planilhas, fotos e ferramentas/prints
 ├─ .claude/skills, .agents/   → skills do Claude (apple-design, emil-design-eng…)
 ├─ ferramentas/
 │  ├─ instalar-node.ps1       → baixa o Node LTS portátil para node/ (UTF-8 com BOM)
+│  ├─ vetorizar-logo.mjs      → transforma "Logo em alta.png" em SVG (logo-oase.svg, logo-casa.svg, icone.svg)
 │  ├─ gerar-icone.mjs         → gera app/public/icone.ico (16 a 256 px) a partir do icone.svg, pelo Edge escondido
 │  ├─ criar-atalho.ps1        → cria o atalho "LAR" na área de trabalho (só ASCII: o PowerShell 5.1 lê .ps1 sem BOM como ANSI)
 │  ├─ testar-telas.mjs        → TESTE: conferências + API + todas as telas no Edge escondido (computador, celular, escuro)
+│  ├─ imprimir-telas.mjs      → gera um PDF A4 de cada documento impresso (ferramentas\prints\pdf) para conferir o visual
+│  ├─ video/                  → VÍDEO de apresentação 4K (ver "Vídeo de apresentação" abaixo)
 │  └─ prints/ (ignorado)      → fotos que o teste tira
 ├─ node/ (ignorado)           dados/ (ignorado: sistema.db e backups — dados reais, NUNCA no Git)
 └─ app/
@@ -231,7 +266,7 @@ novo-sistema/
       └─ icone.svg, fontes/
 ```
 
-**Variáveis da janela preta** (úteis para testar): `APP_DADOS` (pasta do banco), `APP_PORTA` (porta, padrão 3000),
+**Variáveis da janela preta** (úteis para testar): `APP_DADOS` (pasta do banco), `APP_PORTA` (porta, padrão 3001),
 `APP_REDE=1` (libera a rede à força), `APP_RAIZ` (pasta do Git, para testar a atualização).
 
 **Peças prontas no app.js para usar nos próximos módulos:** `api()`, `salvarComVersao()`, `botaoOcupado(botao, fn)`,
@@ -317,7 +352,7 @@ papel de base; financeiro provavelmente com a chefe; nome LAR.
 
 ## 8. Como rodar e testar
 
-1. Duplo clique em **`Iniciar Sistema.bat`** (na 1ª vez baixa o Node sozinho — precisa de internet só nessa vez) e abra http://localhost:3000.
+1. Duplo clique em **`Iniciar Sistema.bat`** (na 1ª vez baixa o Node sozinho — precisa de internet só nessa vez) e abra http://localhost:3001.
 2. Entre como **`kevin`** com a senha **`trocar123`** e crie uma senha sua.
 3. **Configurações › Geral › Carregar a demonstração** para ver o sistema com dados fictícios.
 4. **Configurações › Cópias de segurança**: aponte a pasta para um pen drive ou o OneDrive antes de usar com dado real.
@@ -325,7 +360,7 @@ papel de base; financeiro provavelmente com a chefe; nome LAR.
 **Teste automático** (rede de proteção): na pasta do projeto, `node ferramentas\testar-telas.mjs` (qualquer Node 22+; usa o Edge
 escondido). Usa banco temporário e porta 3998, testa as regras da API (senha, CSRF, CPF, responsável único, perfis, conflito de
 edição, demonstração, cópia), abre todas as telas (computador, celular 390 px e modo escuro), faz as interações principais
-(cadastrar, familiar, situação, ajuda, busca, bloqueio) e tira fotos em `ferramentas\prints`. **0.16.1: 249 ok, 0 falhas.**
+(cadastrar, familiar, situação, ajuda, busca, bloqueio) e tira fotos em `ferramentas\prints`. **0.18.2: 289 ok, 0 falhas.**
 
 **GitHub:** repositório **privado** `https://github.com/kevinhsdev/lar-oase` (criado em 30/09/2026, ramo `main`, primeiro envio = 0.6.0).
 O botão Configurações › Atualizações busca as versões novas dele. Para mandar uma entrega nova (só quando o Kevin pedir):
@@ -334,6 +369,19 @@ O `.gitattributes` garante CRLF no `.bat`/`.ps1`. Não há GitHub CLI (`gh`) no 
 GitHub usando o login que o Git Credential Manager já guardava. Para instalar o sistema no PC do Lar: `git clone` desse endereço
 (pede o login do GitHub uma vez) e depois o atalho (`ferramentas\criar-atalho.ps1`).
 
+### Vídeo de apresentação (06/10/2026)
+`node ferramentas\video\gravar-video.mjs` → `ferramentas\prints\video\OASE-Lar-apresentacao-4K.mp4` (3840x2160, 30 q/s, H.264, ~2 min 50 s, sem som; abertura com a casa + "OASE" escrito com a fonte do sistema, montagem de 14 módulos com as páginas rolando, encerramento com o símbolo da igreja — torre, cruz e globo — num medalhão).
+Sem ffmpeg nem nada instalado: (1) **captura** — servidor de teste em pasta temporária com a **demonstração fictícia** (porta 3996),
+Edge escondido fotografa as telas em 4K (computador, celular 390x844 a 3x, modo escuro e documentos A4) e anota onde ficam os botões;
+cria uma dose fictícia "Vitamina D3" no horário atual para a cena do "Dei"; na tela de cópias troca o caminho temporário (que mostra
+o usuário do Windows) por "E:\Cópias do Lar". (2) **estúdio** (`estudio.js`) — desenha cada quadro num canvas: fundo escuro com brilho
+laranja/verde, janela de navegador, câmera (zoom/panorâmica), seta do mouse com clique, legendas de marketing, transições (fusão e
+"clarão"), celulares, folhas impressas e selos; codifica com o **WebCodecs do Edge** e o `gravar-video.mjs` monta o .mp4 ("faststart").
+Leva uns 10 min. Para conferir a edição antes: `--previa=3,12.5,40` (PNGs em `ferramentas\prints\video\previa`);
+só as fotos: `--so-captura`. Mudou uma tela do sistema? Basta gravar de novo (as fotos são tiradas na hora).
+Armadilhas: medidas dos botões são **relativas à parte visível** (a foto é da parte visível); a página do estúdio precisa ser servida
+por http://127.0.0.1 (o WebCodecs só existe em página "segura"); comentário `//` dentro de código mandado ao Edge numa linha só quebra tudo.
+
 ### Armadilhas
 - **Barra de baixo do celular:** com mais de 5 grupos, ela mostra os 4 primeiros e um botão **"Mais"** com o resto
   (`desenharNavegacao`, classes `so-trilho`/`mais-grupos`). A **ordem em `GRUPOS`** decide quem fica visível no celular.
@@ -341,11 +389,14 @@ GitHub usando o login que o Git Credential Manager já guardava. Para instalar o
   gasta só o que já existia naquele dia, primeiro o que vence antes. (Um primeiro jeito, sem a ordem do tempo, marcava vencido errado — o teste pegou.)
 - **Scripts do navegador dividem o escopo global**: nome repetido de `const`/`function` quebra tudo (o teste confere).
 - **CSP:** nada de `onclick="..."` no HTML nem `<script>` solto — ligue eventos pelo JS (o teste confere).
+  Imagem só de `'self'` ou `data:`: **`blob:` (URL.createObjectURL) é bloqueado** — por isso `prepararFoto` lê o arquivo com FileReader.
 - A tela é montada numa `div` nova e entra inteira no `#conteudo` (`rotear`): eventos ligados em `c` continuam valendo.
 - `sistema.js` usa `ddRes`/`datalist` de `residentes.js` (carregado depois): funciona porque só são chamados ao abrir a tela.
 - Edge escondido segue o tema do Windows: o teste força o claro nas telas principais e testa o escuro à parte.
 - O `.bat` precisa de fim de linha **CRLF** e só ASCII; o `.ps1` com acento precisa de UTF-8 **com BOM**.
 - No Bash do Claude Code não use heredoc/`node -e` com texto grande para editar arquivo: use a ferramenta de edição.
+- Impressão: o documento é montado no `beforeprint`, que é **síncrono** — a função de `definirImpressao` só pode usar dados que a tela já
+  carregou (nada de `await`). A foto do residente entra porque já está no cache do navegador.
 
 ## 9. Histórico de versões
 | Versão | Data | O que mudou |
@@ -367,3 +418,8 @@ GitHub usando o login que o Git Credential Manager já guardava. Para instalar o
 | 0.15.0 | 30/09/2026 | **Prontuário completo** por residente (tudo numa página, por período, para imprimir). |
 | 0.16.0 | 30/09/2026 | **Financeiro** (resumo com gráfico e resultado por categoria, contas a pagar/receber, mensalidades, recibo com valor por extenso). Menu lateral que cabe com muitos grupos. Teste: **249 ok**. |
 | 0.16.1 | 30/09/2026 | Início: "Próximos aniversários" compacto (só os 4 mais perto) e cartões em duas colunas equilibradas. Arquivo **PERGUNTAS-PARA-A-CHEFE.md** com tudo o que falta validar. Teste: **249 ok**. |
+| 0.16.2 | 06/10/2026 | Porta padrão trocada de **3000 para 3001** (a 3000 colidia com o portfólio do Kevin). Endereço agora: http://localhost:3001. |
+| 0.17.0 | 06/10/2026 | **Foto do residente**: clicar no avatar da ficha põe/troca/remove a foto (no celular tira na hora). Recortada e diminuída no navegador, guardada no próprio banco (entra no backup). Aparece na lista, nos cartões e na ficha. Teste: **251 ok**. |
+| 0.18.0 | 06/10/2026 | **Impressão formal**: todo botão Imprimir (e o Ctrl+P) gera um documento A4 próprio — cabeçalho timbrado, tabelas, rodapé com página X de Y, assinaturas; folha de remédios e ronda para preencher à mão; escala em paisagem; recibo em 2 vias. Ferramenta `imprimir-telas.mjs` (PDFs para conferir). Teste: **286 ok**. |
+| 0.18.1 | 06/10/2026 | **Logo nova da OASE** (casa laranja com árvore e casal) vetorizada em SVG (`app/public/logo-oase.svg` completa e `logo-casa.svg` só o desenho) pela ferramenta `ferramentas/vetorizar-logo.mjs` a partir de `Logo em alta.png`. Cabeçalho de todos os documentos: logo + nome + OASE + **CNPJ 60.761.657/0001-01** (editável em Configurações › Geral, validado).  Teste: **289 ok**. |
+| 0.18.2 | 06/10/2026 | **Logo nova em todo o sistema**: menu lateral (só o desenho, com "OASE" em texto embaixo), tela de entrada, recibo, documentos, aba do navegador e ícone do atalho. Saíram `logo.png`/`logo-escuro.png` e a cor vinho `--oase`. Teste: **289 ok**. |

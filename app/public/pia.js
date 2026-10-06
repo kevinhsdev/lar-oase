@@ -45,6 +45,19 @@ async function documentoPia(c, rid, versao) {
       ${d.versoes.map((v) => `<a class="linha" href="#/pia/residente-${r.id}-v${v.id}"><span class="meio"><b>${esc(dataBR(v.data))}${v.id === d.versoes[0].id ? ' (atual)' : ''}</b>
         <small>por ${esc(nomeAutorDia({ autor_nome: v.autor_nome, criado_por: v.criado_por }))}</small></span>${v.id === (p && p.id) ? '<span class="etiqueta marca">Aberta</span>' : icone('seta')}</a>`).join('')}</div></section>` : ''}`;
   if ($('#piaImprimir', c)) $('#piaImprimir', c).onclick = () => window.print();
+  if (p) {
+    definirImpressao(() => ({
+      titulo: 'Plano Individual de Atenção (PIA)', sub: `${r.nome}${!ehAtual ? ' · versão anterior, de ' + dataBR(p.data) : ''}`,
+      corpo: docCampos([['Residente', r.nome, 2], ['Nascimento', r.dt_nasc ? dataBR(r.dt_nasc) : ''], ['Quarto', r.quarto], ['Grau de dependência', r.grau_dependencia ? 'Grau ' + r.grau_dependencia : ''],
+        ['Data do plano', dataBR(p.data)], ['Próxima revisão', p.proxima_revisao ? dataBR(p.proxima_revisao) : ''], ['Elaborado por', nomeAutorDia({ autor_nome: p.autor_nome, criado_por: p.criado_por })],
+        ['Participaram', p.participantes, 4]], 4)
+        + docNota('Plano previsto na RDC 502/2021 (Anvisa), elaborado pela equipe com o residente e a família, e revisado periodicamente.')
+        + d.areas.map(([k, nome]) => { const a = p.areas[k] || {}; if (!a.situacao && !a.metas && !a.acoes) return '';
+          return docSecao(nome + (a.responsavel ? ` — responsável: ${a.responsavel}` : ''), docCampos([[ROTULOS_PIA.situacao, a.situacao], [ROTULOS_PIA.metas, a.metas], [ROTULOS_PIA.acoes, a.acoes]], 1)); }).join('')
+        + (p.obs ? docSecao('Observações gerais', `<p style="margin:0" class="doc-quebras">${esc(p.obs)}</p>`) : '')
+        + docAssinaturas(['Responsável técnico(a)', 'Residente ou responsável', 'Equipe multiprofissional']),
+    }));
+  }
   $('#piaRevisar', c).onclick = () => formPia(d);
 }
 

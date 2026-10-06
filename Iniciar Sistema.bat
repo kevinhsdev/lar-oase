@@ -12,7 +12,7 @@ if not exist "%~dp0node\node.exe" (
   )
 )
 cd /d "%~dp0app"
-start "" "http://localhost:3000"
+start "" "http://localhost:3001"
 
 :inicio
 "%~dp0node\node.exe" --no-warnings server.js

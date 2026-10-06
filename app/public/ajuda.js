@@ -35,6 +35,7 @@ const AJUDA = {
     serve: 'Tudo sobre uma pessoa: dados pessoais, saúde, quarto, familiares e o histórico de quem mexeu na ficha.',
     passos: [
       '<b>Editar ficha</b> abre todos os dados para alterar.',
+      'Para pôr ou trocar a <b>foto</b>, clique no círculo com as iniciais (ou na foto) no alto da ficha. No celular dá para tirar a foto na hora. Ela aparece também na lista de residentes.',
       'Para mudar a <b>situação</b> (no lar, hospitalizado, saiu, faleceu), clique na opção no alto da ficha e informe a data. A ficha nunca some: quem saiu ou faleceu fica no filtro Histórico.',
       'Em <b>Familiares e contatos</b>, clique em Acrescentar. Marque quem é o <b>responsável</b> e quem chamar numa <b>emergência</b>: eles aparecem em destaque no alto da ficha, com o botão Ligar.',
       '<b>Imprimir</b> gera a ficha em papel, com a data e quem imprimiu.',

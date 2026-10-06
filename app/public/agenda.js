@@ -96,6 +96,21 @@ TELAS.agenda = async (c, arg) => {
   area.addEventListener('click', (e) => { const b = e.target.closest('[data-agendar]'); if (b) formCompromisso(null, { data: b.dataset.agendar || (ref >= hojeIso() ? ref : hojeIso()), residente_id: modoResidente }); });
   $('#agNovo', c).onclick = () => formCompromisso(null, { data: ref >= hojeIso() ? ref : hojeIso(), residente_id: modoResidente });
   $('#agImprimir', c).onclick = () => window.print();
+  definirImpressao(() => {
+    const porDia = {};
+    for (const a of [...itens].sort((x, y) => (modoResidente ? 0 : x.data.localeCompare(y.data) || (x.hora || '').localeCompare(y.hora || '')))) (porDia[a.data] ||= []).push(a);
+    return {
+      titulo: modoResidente ? 'Agenda do residente' : 'Agenda de compromissos',
+      sub: modoResidente ? `${resid.residente.nome} · ${plural(itens.length, 'compromisso', 'compromissos')}` : `${periodo[0].toUpperCase() + periodo.slice(1)} (${dataBR(de)} a ${dataBR(ate)}) · ${plural(pendentes, 'agendado', 'agendados')}`,
+      corpo: docTabela([{ t: 'Horário', w: '10%' }, { t: 'Tipo', w: '10%' }, { t: 'Compromisso', w: '25%' }, ...(modoResidente ? [] : [{ t: 'Residente', w: '17%' }]),
+        { t: 'Local', w: modoResidente ? '22%' : '15%' }, { t: 'Acompanhante / transporte', w: modoResidente ? '20%' : '14%' }, { t: 'Situação', w: modoResidente ? '13%' : '9%' }],
+      Object.entries(porDia).flatMap(([iso, os]) => [{ grupo: nomeDia(iso) + ' de ' + iso.slice(0, 4) }, ...os.map((a) => [esc(horarioAg(a)), esc((TIPOS_AG[a.tipo] || TIPOS_AG.outro).nome),
+        `<b>${esc(a.titulo)}</b>${a.obs ? `<small>${esc(a.obs)}</small>` : ''}`, ...(modoResidente ? [] : [a.residente_id ? esc(a.residente_nome || '') : '<i>Todo o lar</i>']),
+        esc(a.local || ''), esc([a.acompanhante, a.transporte].filter(Boolean).join(' · ')),
+        `${esc(SIT_AG[a.situacao])}${a.resultado ? `<small>${esc(a.resultado)}</small>` : ''}`])]),
+      { vazio: 'Nenhum compromisso no período.' }),
+    };
+  });
   if (!modoResidente) {
     const passo = vistaAg === 'lista' ? 30 : 7;
     const ir = (iso) => { if (iso) location.hash = iso === hojeIso() ? '#/agenda' : `#/agenda/${iso}`; };

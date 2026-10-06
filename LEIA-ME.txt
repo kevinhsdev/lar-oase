@@ -3,7 +3,7 @@ OASE - Lar (sistema do lar de idosos da OASE) — como usar
 
 ABRIR
   Dê dois cliques em "Iniciar Sistema.bat". Abre uma janela preta (é o sistema funcionando: NÃO feche enquanto usa)
-  e o navegador em http://localhost:3000. Na primeira vez ele baixa o Node.js sozinho (precisa de internet só nessa vez).
+  e o navegador em http://localhost:3001. Na primeira vez ele baixa o Node.js sozinho (precisa de internet só nessa vez).
 
 PRIMEIRO ACESSO
   Usuário: kevin     Senha: trocar123

@@ -25,8 +25,20 @@ TELAS.avaliacoes = async (c, arg) => {
   $('#avImprimir', c).onclick = () => window.print();
   if (!d.linhas.length) return;
   const area = $('#avTabela', c);
+  let visAv = d.linhas;
+  const celulaDocAv = (u, k) => (!u ? '<span class="doc-vazio">não avaliado</span>'
+    : `<b>${u.pontuacao}</b>/${d.escalas[k].maximo} — ${esc(u.classificacao)}<small>${esc(dataBR(u.data))}${u.vencida ? ' · ' : ''}</small>${u.vencida ? docMarca('Reavaliar') : ''}`);
+  definirImpressao(() => ({
+    titulo: 'Quadro de avaliações geriátricas',
+    sub: `${{ todos: 'Todos os residentes no lar', pendentes: 'Para fazer ou reavaliar', risco: 'Com risco alto' }[filtro]} · ${plural(visAv.length, 'residente', 'residentes')}`,
+    corpo: docTabela([{ t: 'Residente', w: '25%' }, ...ORDEM_ESC.map((k) => ({ t: d.escalas[k].titulo, w: '25%' }))],
+      visAv.map((l) => [`<b>${esc(l.nome)}</b>${l.grau_dependencia ? `<small>Grau ${esc(l.grau_dependencia)} de dependência</small>` : ''}`, ...ORDEM_ESC.map((k) => celulaDocAv(l.ultimas[k], k))]),
+      { vazio: 'Nenhum residente neste filtro.' })
+      + docNota(ORDEM_ESC.map((k) => `<b>${esc(d.escalas[k].nome)}</b>: ${esc(d.escalas[k].explica)} Reavaliar a cada ${d.escalas[k].reavaliar} dias.`).join('<br>')),
+  }));
   const desenhar = () => {
     const vis = d.linhas.filter((l) => filtro === 'todos' || (filtro === 'pendentes' ? Object.values(l.ultimas).some((u) => !u || u.vencida) : Object.values(l.ultimas).some((u) => u && u.cor === 'perigo')));
+    visAv = vis;
     area.innerHTML = vis.length ? `<div class="tabela-caixa"><table class="tabela"><thead><tr><th>Residente</th>${ORDEM_ESC.map((k) => `<th>${esc(d.escalas[k].nome)}</th>`).join('')}<th></th></tr></thead><tbody>
       ${vis.map((l) => `<tr><td><a href="#/avaliacoes/residente-${l.id}" style="display:flex;align-items:center;gap:10px;color:var(--texto);font-weight:600">${avatar(l.nome, 'p')}${esc(l.apelido || l.nome)}</a>
         ${l.grau_dependencia ? `<small class="fraco">Grau ${esc(l.grau_dependencia)}</small>` : ''}</td>
@@ -59,6 +71,15 @@ async function historicoAvaliacoes(c, rid) {
             <span class="etiqueta ${a.cor}">${esc(a.classificacao)}</span></div>`; }).join('')}</div>` : '<p class="mudo">Nenhuma avaliação ainda.</p>'}</section>`;
     }).join('')}</div>`;
   $('#haImprimir', c).onclick = () => window.print();
+  definirImpressao(() => ({
+    titulo: 'Histórico de avaliações', sub: `${r.nome} · ${plural(d.itens.length, 'avaliação', 'avaliações')}`,
+    corpo: ORDEM_ESC.map((k) => { const lista = d.itens.filter((a) => a.escala === k);
+      return docSecao(d.escalas[k].titulo, docTabela([{ t: 'Data', w: '13%' }, { t: 'Pontos', w: '11%', a: 'dir' }, { t: 'Resultado', w: '24%' }, { t: 'Observação / cuidados', w: '32%' }, { t: 'Avaliado por', w: '20%' }],
+        lista.map((a, i) => { const ant = lista[i + 1];
+          return [esc(dataBR(a.data)), `<b>${a.pontuacao}</b>/${d.escalas[k].maximo}${ant ? `<small>${a.pontuacao > ant.pontuacao ? 'subiu' : a.pontuacao < ant.pontuacao ? 'desceu' : 'igual'}</small>` : ''}`,
+            esc(a.classificacao), esc(a.obs || ''), esc(nomeAutorDia({ autor_nome: a.autor_nome, criado_por: a.criado_por }))]; }),
+        { vazio: 'Nenhuma avaliação ainda.' }) + docNota(esc(d.escalas[k].explica)), 'junta'); }).join(''),
+  }));
   c.addEventListener('click', (e) => {
     const b = e.target.closest('[data-avaliar-h]');
     if (b) formAvaliacao(r, b.dataset.avaliarH, d.escalas, d.itens.find((a) => a.escala === b.dataset.avaliarH));

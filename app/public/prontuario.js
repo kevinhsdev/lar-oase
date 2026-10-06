@@ -60,5 +60,30 @@ TELAS.prontuario = async (c, id) => {
       <b>${esc((TIPOS_DIA[o.tipo] || {}).nome || o.tipo)}</b>${o.gravidade !== 'normal' ? ` <span class="etiqueta ${o.gravidade === 'grave' ? 'perigo' : 'aviso'}">${o.gravidade === 'grave' ? 'Grave' : 'Atenção'}</span>` : ''} — ${esc(o.texto)}
       <span class="fraco">(${esc(nomeAutorDia(o))})</span></span></li>`).join('')}</ul>` : '<p class="mudo">Nada anotado no período.</p>')}`;
   $('#prImprimirTudo', c).onclick = () => window.print();
+  definirImpressao(() => ({
+    titulo: 'Prontuário do residente', sub: `${r.nome} · período de ${dataBR(desde)} a ${dataBR(hojeIso())}`,
+    corpo: docIdentResidente(r)
+      + (r.alergias ? docAlerta(`<b>Alergias:</b> ${esc(r.alergias)}`) : '')
+      + docSecao('Acolhimento e saúde', docCampos([['Entrada no lar', r.dt_entrada ? `${dataBR(r.dt_entrada)} (${tempoDesde(r.dt_entrada)})` : ''], ['Quarto / leito', [r.quarto, r.leito].filter(Boolean).join(' · ')],
+        ['Convênio', [r.convenio, r.convenio_numero].filter(Boolean).join(' · ')], ['Grau de dependência', r.grau_dependencia ? 'Grau ' + r.grau_dependencia : ''], ['Mobilidade', r.mobilidade],
+        ['Tipo sanguíneo', r.tipo_sanguineo], ['Diagnósticos', r.diagnosticos, 2], ['Dieta', r.dieta], ['Médico(a) de referência', [r.medico, r.medico_tel].filter(Boolean).join(' · '), 3]], 3))
+      + docSecao('Familiares e contatos', docTabelaContatos(cs))
+      + docSecao('Remédios em uso', docTabelaRemedios(rx.itens))
+      + docSecao('Avaliações (as mais recentes)', docTabela([{ t: 'Escala', w: '36%' }, { t: 'Pontos', w: '12%', a: 'dir' }, { t: 'Resultado', w: '34%' }, { t: 'Data', w: '18%' }],
+        ['katz', 'braden', 'morse'].map((k) => { const a = ultimaAv(k);
+          return [esc(avs.escalas[k].titulo), a ? String(a.pontuacao) : '', a ? esc(a.classificacao) : '<span class="doc-vazio">não avaliado</span>', a ? esc(dataBR(a.data)) : '']; })), 'junta')
+      + docSecao(`Sinais vitais no período (${plural(sv.itens.length, 'medida', 'medidas')})`, docResumoSinais(sv.itens, sv.medidas), 'junta')
+      + docSecao(pia.atual ? `PIA — Plano Individual de Atenção (${dataBR(pia.atual.data)})` : 'PIA — Plano Individual de Atenção', pia.atual
+        ? docTabela([{ t: 'Área', w: '18%' }, { t: 'Metas', w: '33%' }, { t: 'Cuidados combinados', w: '35%' }, { t: 'Responsável', w: '14%' }],
+          pia.areas.map(([k, nome]) => { const a = pia.atual.areas[k] || {}; return a.metas || a.acoes ? [`<b>${esc(nome)}</b>`, docTexto(a.metas), docTexto(a.acoes), esc(a.responsavel || '')] : null; }).filter(Boolean))
+        : '<p class="doc-nada">Ainda não há PIA.</p>')
+      + docSecao('Consultas, exames e visitas no período', docTabela([{ t: 'Data', w: '13%' }, { t: 'Compromisso', w: '35%' }, { t: 'Local', w: '24%' }, { t: 'Situação / resultado', w: '28%' }],
+        consultas.map((a) => [esc(dataBR(a.data)), `<b>${esc(a.titulo)}</b><small>${esc((TIPOS_AG[a.tipo] || TIPOS_AG.outro).nome)}</small>`, esc(a.local || ''),
+          `${esc(SIT_AG[a.situacao])}${a.resultado ? `<small>${esc(a.resultado)}</small>` : ''}`]), { vazio: 'Nada no período.' }))
+      + docSecao('Vacinas', docTabela([{ t: 'Data', w: '14%' }, { t: 'Vacina', w: '40%' }, { t: 'Dose', w: '16%' }, { t: 'Lote', w: '14%' }, { t: 'Onde', w: '16%' }],
+        vac.itens.map((v) => [esc(dataBR(v.data)), esc(v.vacina), esc(v.dose || ''), esc(v.lote || ''), esc(v.local || '')]), { classe: 'compacta', vazio: 'Nenhuma vacina registrada.' }))
+      + docSecao(`Diário no período (${plural(dia.itens.length, 'anotação', 'anotações')})`, docTabelaDiario(dia.itens, { comResidente: false }))
+      + docAssinaturas(['Responsável técnico(a)', 'Médico(a)']),
+  }));
   ligarSegmentado($('.periodoPront', c), (v) => { periodoPront = Number(v); rotear(); });
 };

@@ -88,6 +88,27 @@ function ligarItensDiario(raiz, itens) {
   });
 }
 
+// Diário no papel: uma linha por anotação. grupos = [[título do grupo, anotações]] (turno ou dia); sem grupos, lista simples com a data.
+function docTabelaDiario(itens, { comResidente = true, grupos = null } = {}) {
+  const linha = (o, comData) => {
+    const tipo = (TIPOS_DIA[o.tipo] || TIPOS_DIA.outro).nome;
+    const vitais = [o.pa && `PA ${o.pa}`, o.temperatura != null && `${String(o.temperatura).replace('.', ',')} °C`, o.glicemia != null && `glicemia ${o.glicemia}`,
+      o.saturacao != null && `sat. ${o.saturacao}%`, o.freq_cardiaca != null && `${o.freq_cardiaca} bpm`].filter(Boolean).join(' · ');
+    const cel = [comData ? `<span class="doc-nw">${esc(dataBR(o.data))}</span><small>${esc(o.hora)}</small>` : esc(o.hora)];
+    if (comResidente) cel.push(o.residente_id ? esc(o.residente_nome || '') : '<i>Equipe (recado geral)</i>');
+    cel.push(`${esc(tipo)}${o.gravidade !== 'normal' ? `<br>${docMarca(o.resolvida ? 'Era ' + GRAV_DIA[o.gravidade].nome.toLowerCase() : GRAV_DIA[o.gravidade].nome)}` : ''}`);
+    cel.push(`<span class="doc-quebras">${esc(o.texto)}</span>${vitais ? `<small>${esc(vitais)}</small>` : ''}${o.resolvida
+      ? `<small>Resolvida por ${esc(nomeAutorDia({ autor_nome: o.resolvida_por_nome, criado_por: o.resolvida_por }))} em ${esc(dataHoraBR(o.resolvida_em))}${o.resolucao ? ' — ' + esc(o.resolucao) : ''}</small>` : ''}`);
+    cel.push(esc(nomeAutorDia(o)));
+    return cel;
+  };
+  const colunas = [{ t: grupos ? 'Hora' : 'Data', w: grupos ? '7%' : '10%' }, ...(comResidente ? [{ t: 'Residente', w: '18%' }] : []), { t: 'Tipo', w: '12%' },
+    { t: 'Registro', w: comResidente ? (grupos ? '48%' : '45%') : '63%' }, { t: 'Anotado por', w: '15%' }];
+  const linhas = grupos ? grupos.flatMap(([titulo, os]) => [{ grupo: titulo }, ...os.map((o) => linha(o, false))])
+    : itens.map((o) => linha(o, true));
+  return docTabela(colunas, linhas, { vazio: 'Nada anotado.' });
+}
+
 TELAS.diario = async (c, arg) => {
   const modoResidente = /^residente-\d+$/.test(arg || '') ? Number(arg.split('-')[1]) : null;
   const modoAtencao = arg === 'atencao';
@@ -128,9 +149,27 @@ TELAS.diario = async (c, arg) => {
     <div id="diaLista"></div>`;
 
   const lista = $('#diaLista', c);
+  let visDia = itens;
+  definirImpressao(() => {
+    const filtros = [turno !== 'todos' ? 'turno da ' + TURNOS_DIA[turno].toLowerCase() : '', buscaDia.trim() ? `busca: “${buscaDia.trim()}”` : ''].filter(Boolean).join(' · ');
+    let corpo;
+    if (modoResidente || modoAtencao) {
+      const porDia = {};
+      for (const o of visDia) (porDia[o.data] ||= []).push(o);
+      corpo = docTabelaDiario(visDia, { comResidente: !modoResidente, grupos: Object.entries(porDia).map(([data, os]) => [nomeDia(data), os]) });
+    } else {
+      corpo = docTabelaDiario(visDia, { grupos: Object.entries(TURNOS_DIA).map(([t, nome]) => [`Turno da ${nome.toLowerCase()}`, visDia.filter((o) => o.turno === t).sort((a, b) => a.hora.localeCompare(b.hora) || a.id - b.id)]).filter(([, os]) => os.length) });
+    }
+    return {
+      titulo: modoResidente ? 'Diário do residente' : modoAtencao ? 'Ocorrências pendentes' : 'Diário — livro de ocorrências',
+      sub: [modoResidente ? resid.residente.nome : modoAtencao ? 'atenção ou graves, ainda não resolvidas' : nomeDia(dia) + ' de ' + dia.slice(0, 4), plural(visDia.length, 'registro', 'registros'), filtros].filter(Boolean).join(' · '),
+      corpo: corpo + (modoResidente || modoAtencao ? '' : docAssinaturas(['Responsável pelo turno da manhã', 'Responsável pelo turno da tarde', 'Responsável pelo turno da noite'])),
+    };
+  });
   const desenhar = () => {
     const q = norm(buscaDia.trim());
     const vis = itens.filter((o) => (turno === 'todos' || o.turno === turno) && (!q || norm([o.texto, o.residente_nome, o.residente_apelido, o.autor_nome, TIPOS_DIA[o.tipo]?.nome].join(' ')).includes(q)));
+    visDia = vis;
     if (!vis.length) {
       lista.innerHTML = `<div class="cartao dia-vazio">${q ? vazio('busca', 'Nada encontrado', `Nenhum registro com “${esc(buscaDia.trim())}”.`)
         : modoAtencao ? vazio('check', 'Tudo resolvido', 'Não há ocorrência de atenção ou grave pendente.')

@@ -12,7 +12,7 @@ const { gerarDemo, completarDemo } = require('./lib/demo');
 
 inicializar();
 
-const PORTA = Number(process.env.APP_PORTA || 3000);
+const PORTA = Number(process.env.APP_PORTA || 3001);
 // Por padrão só este PC acessa. A rede (outros PCs e celulares no mesmo Wi-Fi) é liberada em Configurações › Celular e rede
 // (vale depois de reiniciar) ou à força com APP_REDE=1.
 const REDE_FORCADA = process.env.APP_REDE === '1';
@@ -123,6 +123,18 @@ function servirEstatico(req, res, url) {
 // ───────────────────────── regras gerais ─────────────────────────
 const hoje = () => new Date().toLocaleDateString('sv-SE'); // AAAA-MM-DD no fuso local
 const agoraIso = () => new Date().toISOString();
+// CNPJ: confere os dois dígitos verificadores e devolve formatado (00.000.000/0000-00)
+function cnpjValido(txt) {
+  const d = String(txt || '').replace(/\D/g, '');
+  if (d.length !== 14 || /^(\d)\1{13}$/.test(d)) return null;
+  for (const t of [12, 13]) {
+    let s = 0;
+    for (let i = 0; i < t; i++) s += Number(d[i]) * ((t - i - 1) % 8 + 2);
+    const dv = s % 11 < 2 ? 0 : 11 - (s % 11);
+    if (dv !== Number(d[t])) return null;
+  }
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
 function exigirAdmin(u) { if (u.perfil !== 'admin') falha(403, 'Somente a administração pode fazer isso'); }
 
 // ───────────────────────── rotas ─────────────────────────
@@ -243,7 +255,7 @@ rota('PUT', '/api/admin/config', async (req, res, { u }) => {
   exigirAdmin(u);
   const b = await corpoJson(req);
   // Só estas chaves podem vir da tela (a senha do backup tem rota própria e nunca volta para a tela)
-  const permitidas = ['nome_organizacao', 'bloqueio_minutos', 'backup_pasta', 'backup_horas', 'backup_manter', 'backup_avisar_dias'];
+  const permitidas = ['nome_organizacao', 'cnpj', 'bloqueio_minutos', 'backup_pasta', 'backup_horas', 'backup_manter', 'backup_avisar_dias'];
   const numericas = { bloqueio_minutos: [0, 240], backup_horas: [1, 168], backup_manter: [3, 500], backup_avisar_dias: [1, 60] };
   const mudou = {};
   for (const k of permitidas) {
@@ -255,6 +267,7 @@ rota('PUT', '/api/admin/config', async (req, res, { u }) => {
       v = String(n);
     }
     if (k === 'nome_organizacao' && !v) falha(400, 'Informe o nome da organização');
+    if (k === 'cnpj' && v) v = cnpjValido(v) || falha(400, 'CNPJ inválido: confira os números');
     if (k === 'backup_pasta' && v) {
       try { fs.mkdirSync(v, { recursive: true }); fs.accessSync(v, fs.constants.W_OK); }
       catch { falha(400, 'Não consegui usar essa pasta para os backups. Confira se o caminho existe e se o pen drive está conectado.'); }

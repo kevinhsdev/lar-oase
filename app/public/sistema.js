@@ -100,6 +100,7 @@ async function configGeral(c) {
     <div class="config-grade">
       <section class="cartao"><div class="cartao-topo"><h2>${icone('pessoaCasa')}Organização</h2></div>
         <label class="campo"><span>Nome que aparece no sistema e nas impressões</span><input id="cfgNome" maxlength="80"></label>
+        <label class="campo" style="margin-top:12px"><span>CNPJ (sai no cabeçalho de todos os documentos impressos)</span><input id="cfgCnpj" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00"></label>
         <div class="rodape-cartao acoes"><button type="button" class="btn primario" id="cfgNomeSalvar">Salvar</button></div></section>
       <section class="cartao"><div class="cartao-topo"><h2>${icone('cadeado')}Bloqueio de tela</h2></div>
         <label class="campo"><span>Bloquear depois de quantos minutos sem uso</span><input id="cfgBloqueio" type="number" min="0" max="240" inputmode="numeric">
@@ -120,7 +121,8 @@ async function configGeral(c) {
     </div>`;
   $('#cfgNome', c).value = cf.nome_organizacao || '';
   $('#cfgBloqueio', c).value = cf.bloqueio_minutos || '0';
-  $('#cfgNomeSalvar', c).onclick = (e) => salvarConfig({ nome_organizacao: $('#cfgNome', c).value }, e.currentTarget, 'Nome salvo.');
+  $('#cfgCnpj', c).value = cf.cnpj || '';
+  $('#cfgNomeSalvar', c).onclick = (e) => salvarConfig({ nome_organizacao: $('#cfgNome', c).value, cnpj: $('#cfgCnpj', c).value }, e.currentTarget, 'Dados da organização salvos.');
   $('#cfgBloqueioSalvar', c).onclick = (e) => salvarConfig({ bloqueio_minutos: $('#cfgBloqueio', c).value }, e.currentTarget, 'Tempo de bloqueio salvo.');
   if ($('#demoCarregar', c)) $('#demoCarregar', c).onclick = (e) => botaoOcupado(e.currentTarget, async () => {
     const r = await api('POST', '/api/admin/demo');

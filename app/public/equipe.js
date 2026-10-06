@@ -41,6 +41,18 @@ TELAS.escala = async (c, arg) => {
     <p class="dica" style="margin-top:10px">${admin ? 'Clique num dia para escolher o turno. ' : ''}As linhas de baixo contam quantas pessoas trabalham de dia e de noite; <b style="color:var(--perigo)">0 em vermelho</b> = ninguém escalado.</p>`
     : `<div class="cartao">${vazio('usuario', 'Ninguém na escala', 'Cadastre a equipe em Profissionais (com “Aparece na escala” ligado).', '<a class="btn primario" href="#/profissionais">Ir para Profissionais</a>')}</div>`}`;
   $('#escImprimir', c).onclick = () => window.print();
+  // Papel: a grade do mês em paisagem, letras pequenas (31 dias cabem na largura)
+  definirImpressao(() => ({
+    titulo: 'Escala de trabalho', paisagem: true, sub: `${nomeMesFin(mes)} · ${plural(d.pessoas.length, 'pessoa', 'pessoas')}`,
+    corpo: d.pessoas.length ? `<table class="doc-tabela grade doc-escala"><thead><tr><th class="pessoa">Profissional</th>${dias.map((x) => { const dt = new Date(x + 'T12:00:00');
+        return `<th class="centro${[0, 6].includes(dt.getDay()) ? ' fds' : ''}">${LETRA_DIA[dt.getDay()]}<br>${dt.getDate()}</th>`; }).join('')}</tr></thead>
+      <tbody>${d.pessoas.map((p) => `<tr><td class="pessoa"><b>${esc(p.nome)}</b><small>${esc(p.funcao)}</small></td>${dias.map((x) => { const k = cod.get(p.id + '|' + x);
+        return `<td class="centro${[0, 6].includes(new Date(x + 'T12:00:00').getDay()) ? ' fds' : ''}">${k ? esc(k) : ''}</td>`; }).join('')}</tr>`).join('')}</tbody>
+      <tfoot><tr><td class="pessoa">De dia</td>${dias.map((x) => `<td class="centro">${conta(x, false)}</td>`).join('')}</tr>
+        <tr><td class="pessoa">De noite</td>${dias.map((x) => `<td class="centro">${conta(x, true)}</td>`).join('')}</tr></tfoot></table>
+      ${docNota('<b>Legenda:</b> ' + Object.entries(d.codigos).map(([k, x]) => `<b>${esc(k)}</b> = ${esc(x.nome)}${x.horas ? ' (' + esc(x.horas) + ')' : ''}`).join(' · '))}
+      ${docAssinaturas(['Responsável pela escala', 'Direção'])}` : '<p class="doc-nada">Ninguém na escala.</p>',
+  }));
   $('#escAntes', c).onclick = () => { location.hash = `#/escala/${somarMes(mes, -1)}`; };
   $('#escDepois', c).onclick = () => { location.hash = `#/escala/${somarMes(mes, 1)}`; };
   if (!admin) return;
@@ -99,9 +111,23 @@ TELAS.profissionais = async (c, arg) => {
     <div id="prLista"></div>`;
   const lista = $('#prLista', c), busca = $('#prBusca', c);
   busca.value = buscaProf;
+  let visProf = d.itens;
+  definirImpressao(() => {
+    const grupos = {};
+    for (const p of visProf) (grupos[p.funcao] ||= []).push(p);
+    return {
+      titulo: 'Quadro de profissionais', sub: `Equipe do lar e profissionais de fora · ${plural(visProf.length, 'pessoa', 'pessoas')}${todos ? ' · inclui quem saiu' : ''}`,
+      corpo: docTabela([{ t: 'Nome', w: '27%' }, { t: 'Especialidade', w: '17%' }, { t: 'Registro', w: '14%' }, { t: 'Vínculo', w: '14%' }, { t: 'Telefone', w: '14%' }, { t: 'E-mail', w: '14%' }],
+        Object.entries(grupos).sort(([a], [b]) => d.funcoes.indexOf(a) - d.funcoes.indexOf(b)).flatMap(([f, ps]) => [{ grupo: `${f} · ${ps.length}` },
+          ...ps.map((p) => ({ classe: p.ativo ? '' : 'apagada', celulas: [`<b>${esc(p.nome)}</b>${p.ativo ? '' : '<small>Saiu</small>'}${p.na_escala ? '<small>Na escala de turnos</small>' : ''}`,
+            esc(p.especialidade || ''), esc(p.registro || ''), esc(p.vinculo || ''), esc(p.telefone || ''), esc(p.email || '')] }))]),
+        { vazio: 'Ninguém cadastrado.' }),
+    };
+  });
   const desenhar = () => {
     const q = norm(buscaProf.trim());
     const vis = d.itens.filter((p) => !q || norm([p.nome, p.funcao, p.especialidade, p.registro].join(' ')).includes(q));
+    visProf = vis;
     const grupos = {};
     for (const p of vis) (grupos[p.funcao] ||= []).push(p);
     lista.innerHTML = vis.length ? Object.entries(grupos).sort(([a], [b]) => d.funcoes.indexOf(a) - d.funcoes.indexOf(b)).map(([f, ps]) => `<h2 class="turno-titulo">${esc(f)} · ${ps.length}</h2>

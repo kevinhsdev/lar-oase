@@ -10,7 +10,7 @@ Feito do zero em HTML/CSS/JS puro + Node.js portátil, com o mesmo jeito de trab
 
 ## Como usar
 1. Dê dois cliques em `Iniciar Sistema.bat`. Na primeira vez ele baixa o Node.js portátil sozinho.
-2. Acesse http://localhost:3000 e entre como `kevin`, senha `trocar123` (troca obrigatória no 1º acesso).
+2. Acesse http://localhost:3001 e entre como `kevin`, senha `trocar123` (troca obrigatória no 1º acesso).
 3. Para ver com dados fictícios: **Configurações › Geral › Carregar a demonstração**.
 
 ## Teste automático

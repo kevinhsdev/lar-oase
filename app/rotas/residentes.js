@@ -26,7 +26,7 @@ function cpfValido(txt) {
 const dataValida = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + 'T12:00:00'));
 
 module.exports = function residentes(ctx) {
-  const { rota, db, registrar, registrarAcesso, transacao, falha, conferirVersao, json, corpoJson, exigirAdmin, hoje, agoraIso } = ctx;
+  const { rota, db, registrar, registrarAcesso, transacao, falha, conferirVersao, json, corpoJson, lerCorpo, exigirAdmin, hoje, agoraIso } = ctx;
 
   // Limpa e confere o que veio da tela. Devolve só os campos permitidos (texto vazio vira null).
   function limpar(b, campos) {
@@ -67,7 +67,7 @@ module.exports = function residentes(ctx) {
   // Lista (leve): a tela filtra e busca sem voltar ao servidor
   rota('GET', '/api/residentes', async (req, res) => {
     const lin = db.prepare(`SELECT r.id, r.nome, r.apelido, r.sexo, r.dt_nasc, r.cpf, r.quarto, r.leito, r.dt_entrada, r.situacao, r.situacao_desde,
-        r.grau_dependencia, r.alergias, r.convenio, r.demo,
+        r.grau_dependencia, r.alergias, r.convenio, r.demo, (SELECT atualizado_em FROM fotos WHERE residente_id = r.id) foto_em,
         c.nome resp_nome, c.parentesco resp_parentesco, c.telefone resp_telefone,
         (SELECT COUNT(*) FROM contatos x WHERE x.residente_id = r.id) n_contatos
       FROM residentes r LEFT JOIN contatos c ON c.id = (SELECT id FROM contatos WHERE residente_id = r.id ORDER BY responsavel DESC, emergencia DESC, id LIMIT 1)
@@ -81,7 +81,7 @@ module.exports = function residentes(ctx) {
     registrarAcesso(u.login, 'residente', r.id); // LGPD: fica registrado quem abriu a ficha de quem
     const nomes = Object.fromEntries(db.prepare('SELECT login, nome FROM usuarios').all().map((x) => [x.login, x.nome]));
     json(res, 200, {
-      residente: { ...r, idade: idade(r.dt_nasc) },
+      residente: { ...r, idade: idade(r.dt_nasc), foto_em: db.prepare('SELECT atualizado_em FROM fotos WHERE residente_id = ?').get(r.id)?.atualizado_em || null },
       contatos: db.prepare('SELECT * FROM contatos WHERE residente_id = ? ORDER BY responsavel DESC, emergencia DESC, nome COLLATE NOCASE').all(r.id),
       historico: db.prepare('SELECT quando, usuario, acao FROM log WHERE detalhe LIKE ? ORDER BY id DESC LIMIT 20').all(`%"residente_id":${r.id},%`)
         .map((h) => ({ ...h, nome: nomes[h.usuario] || h.usuario })),
@@ -144,6 +144,35 @@ module.exports = function residentes(ctx) {
       db.prepare('DELETE FROM residentes WHERE id = ?').run(r.id);
     });
     registrar(u.login, 'excluiu residente', { residente_id: r.id, nome: r.nome });
+    json(res, 200, { ok: true });
+  });
+
+  // ── Foto ──
+  // A tela recorta e diminui a foto antes de mandar (JPEG quadrado). Aqui só confere se é JPEG mesmo e se é pequena.
+  rota('GET', '/api/residentes/:id/foto', async (req, res, { p }) => {
+    const f = db.prepare('SELECT imagem FROM fotos WHERE residente_id = ?').get(+p.id) || falha(404, 'Sem foto');
+    // O endereço muda a cada foto nova (?v=data), então o navegador pode guardar a imagem sem perguntar de novo.
+    // "private": só o navegador de quem entrou guarda; nada no meio do caminho.
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=31536000, immutable' });
+    res.end(Buffer.from(f.imagem));
+  });
+
+  rota('PUT', '/api/residentes/:id/foto', async (req, res, { u, p }) => {
+    const r = db.prepare('SELECT id, nome FROM residentes WHERE id = ?').get(+p.id) || falha(404, 'Residente não encontrado');
+    const img = await lerCorpo(req, 2 * 1024 * 1024);
+    if (img.length < 100 || img[0] !== 0xff || img[1] !== 0xd8 || img[2] !== 0xff) falha(400, 'A foto não chegou direito. Tente de novo.');
+    const agora = agoraIso();
+    db.prepare(`INSERT INTO fotos (residente_id, imagem, atualizado_em, atualizado_por) VALUES (?, ?, ?, ?)
+      ON CONFLICT(residente_id) DO UPDATE SET imagem = excluded.imagem, atualizado_em = excluded.atualizado_em, atualizado_por = excluded.atualizado_por`)
+      .run(r.id, img, agora, u.login);
+    registrar(u.login, 'trocou a foto do residente', { residente_id: r.id, nome: r.nome });
+    json(res, 200, { ok: true, foto_em: agora });
+  });
+
+  rota('DELETE', '/api/residentes/:id/foto', async (req, res, { u, p }) => {
+    const r = db.prepare('SELECT id, nome FROM residentes WHERE id = ?').get(+p.id) || falha(404, 'Residente não encontrado');
+    db.prepare('DELETE FROM fotos WHERE residente_id = ?').run(r.id);
+    registrar(u.login, 'removeu a foto do residente', { residente_id: r.id, nome: r.nome });
     json(res, 200, { ok: true });
   });
 

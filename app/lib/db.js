@@ -195,6 +195,12 @@ CREATE INDEX IF NOT EXISTS lancamentos_venc ON lancamentos(vencimento);
 CREATE UNIQUE INDEX IF NOT EXISTS lancamentos_mensalidade ON lancamentos(residente_id, competencia) WHERE competencia IS NOT NULL;`);
 colunaNova('residentes', 'mensalidade', 'REAL');
 colunaNova('residentes', 'dia_vencimento', 'INTEGER');
+// 0.17.0: foto do residente. Fica DENTRO do banco (e não numa pasta) para entrar sozinha no backup — e cifrada, se houver senha.
+// A tela já manda a foto pequena (JPEG quadrado de 512 px, uns 40 KB), então o banco cresce pouco.
+db.exec(`CREATE TABLE IF NOT EXISTS fotos (
+  residente_id INTEGER PRIMARY KEY REFERENCES residentes(id) ON DELETE CASCADE,
+  imagem BLOB NOT NULL, atualizado_em TEXT NOT NULL, atualizado_por TEXT
+);`);
 
 function hashSenha(senha) {
   const sal = crypto.randomBytes(16).toString('hex');
@@ -211,6 +217,7 @@ const SENHA_INICIAL = 'trocar123';
 
 const cfgPadrao = {
   nome_organizacao: 'Lar OASE',
+  cnpj: '60.761.657/0001-01',       // aparece no cabeçalho de todos os documentos impressos (06/10/2026, informado pelo Kevin)
   bloqueio_minutos: '15',           // bloqueia a tela após este tempo parado (0 = não bloquear)
   rede_liberada: '0',               // 1 = celulares e outros PCs da rede podem entrar (vale depois de reiniciar)
   backup_pasta: '',                 // vazio = <dados>\backups. Aponte para um pen drive ou o OneDrive.

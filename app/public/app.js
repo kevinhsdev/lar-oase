@@ -5,7 +5,7 @@
 
 // Precisa ser igual ao VERSAO de app/lib/versao.js. Se o navegador carregar telas novas
 // enquanto a janela preta ainda roda o servidor antigo, o app avisa em vez de dar erro feio.
-const VERSAO = '0.16.1';
+const VERSAO = '0.18.2';
 // Nome do sistema ("OASE - Lar", pedido do Kevin em 30/09/2026). Para trocar: aqui, no <title> do index.html e no title do "Iniciar Sistema.bat".
 const NOME_APP = 'OASE';
 const SUBTITULO_APP = 'Lar';
@@ -497,14 +497,12 @@ const ICONES = {
   contar: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   local: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
   queda: '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/>',
+  camera: '<path d="M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5z"/><circle cx="12" cy="13" r="3.5"/>',
 };
 const icone = (nome, classe = 'ic') => `<svg class="${classe}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[nome] || ''}</svg>`;
-// Selo do sistema: símbolo da OASE (torre, cruz e globo), redesenhado em vetor a partir do logo da OASE (30/09/2026).
-// Versão compacta (traço grosso) para ficar legível pequena. As cores vêm do CSS (.logo-oase), igual ao icone.svg.
-const MARCA_SVG = `<svg class="logo-oase" viewBox="0 0 100 122" aria-hidden="true">
-  <path class="lo-torre" d="M50 5 C47 40 29 88 5 101 C30 103 45 108 50 117 C55 108 70 103 95 101 C71 88 53 40 50 5 Z"/>
-  <ellipse class="lo-globo" cx="50" cy="88" rx="22" ry="10"/><path class="lo-linha" d="M29 88h42"/>
-  <rect class="lo-cruz" x="46.5" y="38" width="7" height="58"/><rect class="lo-braco" x="39" y="49" width="22" height="7"/></svg>`;
+// Logo da OASE (casa laranja com a árvore e o casal na mão — logo nova, 06/10/2026), só o desenho, sem o nome.
+// SVG gerado por ferramentas/vetorizar-logo.mjs a partir de "Logo em alta.png". As cores são as da própria logo.
+const MARCA_LOGO = '<img class="logo-oase" src="logo-casa.svg" alt="" width="56" height="49">';
 
 function vazio(nomeIcone, titulo2, texto, acaoHtml = '') {
   return `<div class="vazio"><span class="ic-caixa">${icone(nomeIcone)}</span><h3>${esc(titulo2)}</h3><p>${texto}</p>${acaoHtml ? `<div class="acoes">${acaoHtml}</div>` : ''}</div>`;
@@ -512,7 +510,7 @@ function vazio(nomeIcone, titulo2, texto, acaoHtml = '') {
 
 // ───────────── entrada (login) e troca de senha ─────────────
 const ARTE_ENTRADA = () => `<section class="entrada-arte" aria-hidden="true">
-  <div class="selo-grande"><span class="selo">${MARCA_SVG}</span><div><b>${esc(NOME_APP)}</b><small>${esc(SUBTITULO_APP)}</small></div></div>
+  <div class="selo-grande"><span class="selo">${MARCA_LOGO}</span><div><b>${esc(NOME_APP)}</b><small>${esc(SUBTITULO_APP)}</small></div></div>
   <div><h1>Cuidado que fica registrado.</h1><p>A ficha de cada residente, os familiares e o dia a dia do lar num lugar só — sem papel perdido e sem precisar de internet.</p></div>
   <div class="rodape-arte">${esc(DESCRICAO_APP)} · versão ${esc(VERSAO)}</div></section>`;
 
@@ -683,7 +681,7 @@ function definirBadge(grupoId, n) {
 function montarCasca() {
   $('#app').innerHTML = `<div class="casca">
     <aside class="trilho" aria-label="Menu principal">
-      <a class="marca-app" href="#/inicio" title="${esc(NOME_APP)} — ${esc(SUBTITULO_APP)}"><span class="selo-png"><img class="logo-claro" src="logo.png" alt="" width="50" height="61"><img class="logo-escuro" src="logo-escuro.png" alt="" width="50" height="61"></span><b>${esc(NOME_APP)}</b></a>
+      <a class="marca-app" href="#/inicio" title="${esc(NOME_APP)} — ${esc(SUBTITULO_APP)}"><span class="selo-png">${MARCA_LOGO}</span><b>${esc(NOME_APP)}</b></a>
       <nav id="navGrupos"></nav>
       <div class="trilho-fim">
         <button type="button" class="btn-icone" id="btnTema"></button>
@@ -771,6 +769,7 @@ async function rotear() {
   let { rota, arg } = rotaAtual();
   if (!TELAS[rota] || !grupoDaRota(rota)) { location.replace('#/inicio'); rota = 'inicio'; arg = undefined; }
   const seq = ++seqRota;
+  definirImpressao(null); // o documento de impressão é da tela anterior: a tela nova define o dela
   desenharNavegacao(rota, arg);
   const alvo = $('#conteudo');
   const nova = document.createElement('div');

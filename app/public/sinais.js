@@ -52,6 +52,27 @@ TELAS.sinais = async (c, arg) => {
       <p class="dica">Preencha só o que mediu. Pressão como <b>120x80</b>; temperatura com vírgula (<b>36,5</b>). Valores fora do normal ficam em vermelho. Clique no nome para ver os gráficos.</p>`
     : `<div class="cartao">${vazio('saude', 'Ninguém no lar', 'Os residentes no lar aparecem aqui para a ronda.')}</div>`}`;
   $('#svImprimir', c).onclick = () => window.print();
+  // Papel: a folha da ronda. Quem já foi medido sai com os valores; quem falta sai com as casas em branco para anotar à mão.
+  definirImpressao(() => ({
+    titulo: 'Ronda de sinais vitais', paisagem: true,
+    sub: `${nomeDia(dia)} de ${dia.slice(0, 4)} · ${d.medidos} de ${plural(d.linhas.length, 'residente medido', 'residentes medidos')}`,
+    corpo: (d.alertas.length ? docAlerta(`<b>Fora do normal:</b> ${d.alertas.map((a) => `${esc(a.nome)} (${esc(nomesFora(a.fora, m))} às ${esc(a.hora)})`).join('; ')}.`) : '')
+      + docTabela([{ t: 'Residente', w: '20%' }, { t: 'Quarto', w: '6%' }, { t: 'Hora', w: '6%' }, { t: 'Pressão', w: '9%', a: 'centro' }, { t: 'Temp. °C', w: '7%', a: 'centro' },
+        { t: 'Glicemia', w: '7%', a: 'centro' }, { t: 'Sat. %', w: '7%', a: 'centro' }, { t: 'Batim.', w: '7%', a: 'centro' }, { t: 'Dor 0–10', w: '7%', a: 'centro' },
+        { t: 'Observação', w: '12%' }, { t: 'Medido por / rubrica', w: '12%' }],
+      d.linhas.flatMap((l) => {
+        const leituras = l.leituras.length ? l.leituras : [null];
+        return leituras.map((x, n) => {
+          const v = (k, txt) => (!x || x[k] == null ? '' : x.fora.includes(k) ? `<b>${esc(txt)} *</b>` : esc(txt));
+          return [n ? '' : `<b>${esc(l.nome)}</b>`, n ? '' : esc(l.quarto || ''), x ? esc(x.hora) : '',
+            x && x.pa_sist != null ? (x.fora.includes('pa_sist') || x.fora.includes('pa_diast') ? `<b>${x.pa_sist}x${x.pa_diast} *</b>` : `${x.pa_sist}x${x.pa_diast}`) : '',
+            v('temperatura', x && x.temperatura != null ? numBR(x.temperatura, 1) : ''), v('glicemia', x ? x.glicemia : ''), v('saturacao', x ? x.saturacao : ''),
+            v('fc', x ? x.fc : ''), v('dor', x ? x.dor : ''), x ? esc(x.obs || '') : '', x ? esc(nomeAutorDia({ autor_nome: x.autor_nome, criado_por: x.criado_por })) : ''];
+        });
+      }), { classe: 'grade', vazio: 'Nenhum residente no lar.' })
+      + docNota('* fora da faixa normal (provisória, definida com a enfermagem). Pressão como 120x80; temperatura com vírgula (36,5). Avise a enfermagem e anote no Diário quando houver valor fora do normal.')
+      + docAssinaturas(['Responsável pela ronda', 'Enfermagem — conferência']),
+  }));
   const ir = (iso) => { if (iso && iso <= hojeIso()) location.hash = iso === hojeIso() ? '#/sinais' : `#/sinais/${iso}`; };
   $('#svData', c).onchange = (e) => ir(e.target.value);
   $('#svAntes', c).onclick = () => ir(somarDiasIso(dia, -1));
@@ -79,6 +100,33 @@ TELAS.sinais = async (c, arg) => {
     rotear();
   });
 };
+
+// ───────────── no papel ─────────────
+// Média, menor e maior de cada medida (gráficos de cada residente e prontuário)
+function docResumoSinais(itens, medidas) {
+  const linhas = [['Pressão máxima', 'pa_sist', 0], ['Pressão mínima', 'pa_diast', 0], ['Temperatura', 'temperatura', 1], ['Glicemia', 'glicemia', 0], ['Saturação', 'saturacao', 0],
+    ['Batimentos', 'fc', 0], ['Peso', 'peso', 1], ['Dor (0 a 10)', 'dor', 0]];
+  return docTabela([{ t: 'Medida', w: '24%' }, { t: 'Unidade', w: '12%' }, { t: 'Média', w: '12%', a: 'dir' }, { t: 'Menor', w: '12%', a: 'dir' }, { t: 'Maior', w: '12%', a: 'dir' },
+    { t: 'Medidas', w: '12%', a: 'dir' }, { t: 'Fora do normal', w: '16%', a: 'dir' }],
+  linhas.map(([nome, k, casas]) => {
+    const vs = itens.map((l) => l[k]).filter((v) => v != null);
+    if (!vs.length) return null;
+    const fora = itens.filter((l) => l.fora.includes(k)).length;
+    return [esc(nome), esc((medidas[k] || {}).unidade || ''), esc(numBR(vs.reduce((a, b) => a + b, 0) / vs.length, casas)), esc(numBR(Math.min(...vs), casas)),
+      esc(numBR(Math.max(...vs), casas)), String(vs.length), fora ? `<b>${fora}</b>` : '0'];
+  }).filter(Boolean), { vazio: 'Nenhuma medida no período.' });
+}
+// Uma linha por leitura (o mais novo primeiro)
+function docTabelaLeituras(itens) {
+  return docTabela([{ t: 'Data e hora', w: '15%' }, { t: 'Pressão', w: '10%', a: 'centro' }, { t: 'Temp.', w: '8%', a: 'centro' }, { t: 'Glicemia', w: '9%', a: 'centro' },
+    { t: 'Sat. %', w: '8%', a: 'centro' }, { t: 'Batim.', w: '8%', a: 'centro' }, { t: 'Peso', w: '8%', a: 'centro' }, { t: 'Dor', w: '7%', a: 'centro' }, { t: 'Anotado por', w: '27%' }],
+  itens.map((l) => { const f = (k, txt) => (txt === '' || txt == null ? '' : l.fora.includes(k) ? `<b>${esc(txt)} *</b>` : esc(txt));
+    return [`${esc(dataBR(l.data))} ${esc(l.hora)}${l.origem === 'diario' ? '<small>Diário</small>' : ''}`,
+      l.pa_sist != null ? (l.fora.includes('pa_sist') || l.fora.includes('pa_diast') ? `<b>${l.pa_sist}x${l.pa_diast} *</b>` : `${l.pa_sist}x${l.pa_diast}`) : '',
+      f('temperatura', l.temperatura != null ? numBR(l.temperatura, 1) : ''), f('glicemia', l.glicemia), f('saturacao', l.saturacao), f('fc', l.fc),
+      l.peso != null ? esc(numBR(l.peso, 1)) : '', f('dor', l.dor), esc(nomeAutorDia({ autor_nome: l.autor_nome, criado_por: l.criado_por }))]; }),
+  { classe: 'compacta', vazio: 'Nenhuma medida no período.' });
+}
 
 // ───────────── gráfico de uma medida (SVG) ─────────────
 // pontos: [{ t (ms), v: [valor1, valor2?], quando (texto), fora (bool) }]; faixa = [mín, máx] do normal
@@ -186,6 +234,12 @@ async function graficosResidente(c, rid) {
           <td>${esc(nomeAutorDia({ autor_nome: l.autor_nome, criado_por: l.criado_por }))}</td></tr>`; }).join('')}</tbody></table></div>`
         : `<div class="graficos">${cartoes}</div><p class="dica" style="margin-top:10px">Passe o mouse (ou o dedo) no gráfico para ver cada medida. A faixa clara é o “normal” para idosos (provisório — a enfermagem pode ajustar). Pontos com anel vermelho = fora do normal.</p>`}</div>`;
   $('#grImprimir', c).onclick = () => window.print();
+  definirImpressao(() => ({
+    titulo: 'Sinais vitais do residente', sub: `${r.nome} · últimos ${periodoSinais} dias (${dataBR(d.desde)} a ${dataBR(hojeIso())}) · ${plural(itens.length, 'leitura', 'leituras')}`,
+    corpo: docSecao('Resumo do período', docResumoSinais(itens, m), 'junta')
+      + docSecao('Todas as medidas', docTabelaLeituras([...itens].reverse()))
+      + docNota('* fora da faixa normal para idosos (provisória — a enfermagem pode ajustar). “Diário” = anotado junto com uma ocorrência do diário.'),
+  }));
   ligarSegmentado($('.periodoSv', c), (v) => { periodoSinais = Number(v); rotear(); });
   ligarSegmentado($('.vistaSv', c), (v) => { vistaSinais = v; rotear(); });
   ligarGraficosSinais(c);

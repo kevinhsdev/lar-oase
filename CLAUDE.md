@@ -8,8 +8,6 @@ O contexto completo (o que é o sistema, arquitetura, como criar módulos, rotei
   Trabalha à tarde (13h–19h) e não vai às sextas.
 - **Não é programador.** Responder **sempre em português (pt-BR)**, com linguagem simples, sem jargão.
   Ao entregar algo, dizer: **o que mudou, para que serve e como testar**.
-- Ele já construiu com o Claude a **Secretaria IEL (SEK)** — repositório privado `github.com/kevinhsdev/secretaria-iel`,
-  na pasta vizinha `..\secretaria-iel`. Este projeto nasceu como **base tirada dela** (mesma segurança, visual e jeito de trabalhar).
 - Objetivo deste projeto: a chefe do Kevin pediu **um sistema parecido com um sistema da sede**. O que exatamente ele faz
   ainda está sendo levantado — ver `HANDOFF.md` §7 (perguntas para a chefe). Não inventar requisitos: perguntar.
 
@@ -17,8 +15,6 @@ O contexto completo (o que é o sistema, arquitetura, como criar módulos, rotei
 - **App web local**: um PC é o servidor e os outros acessam pelo navegador (celular também, pelo QR Code em Configurações).
 - **Node.js portátil, sem npm e sem dependências externas.** Banco **`node:sqlite`** (embutido). Front-end em **HTML/CSS/JS puro**.
   Funciona **sem internet**. Nada de React, Vue, bibliotecas de CDN ou nuvem.
-- App **refeito do zero em 30/09/2026** (a pedido do Kevin). Visual próprio feito com as skills `emil-design-eng` e `apple-design`:
-  trilho lateral (barra embaixo no celular), grupos, abas no alto, claro/escuro, fontes locais. Regras de movimento no `HANDOFF.md` §5.
 - Login por pessoa, perfis `admin` e `usuario`; senha inicial `trocar123`, troca obrigatória no 1º acesso.
 
 ## Regras de ouro
@@ -34,10 +30,10 @@ O contexto completo (o que é o sistema, arquitetura, como criar módulos, rotei
 
 ## Convenções do código
 - Tudo em **português** (funções, variáveis, mensagens, comentários explicando o *porquê*).
-- Servidor: rotas em `app/rotas/<modulo>.js` recebendo `ctx` (modelo: `rotas/residentes.js`). Toda alteração chama
+- Servidor: rotas em `app/rotas/<modulo>.js` recebendo `ctx` (modelo: `rotas/registros.js`). Toda alteração chama
   `registrar(usuario, acao, detalhe)` (auditoria). Colunas vindas do navegador passam por uma **lista de permitidas**.
 - Front-end: `TELAS.<rota> = async (c, arg) => { ... }`, rota por hash `#/rota/arg`. Tela nova também entra em `GRUPOS`
-  (app.js), no `index.html` e na `AJUDA` (ajuda.js). Modelo: `public/residentes.js`.
+  (app.js), no `index.html` e na `AJUDA` (ajuda.js). Modelo: `public/registros.js`.
 - **Todos os scripts do navegador dividem o mesmo escopo global**: nunca repetir o nome de uma `const`/`function` entre arquivos
   (quebra o app inteiro). Conferir com: `grep -ohE "^(const|let|function|async function) +\w+" app/public/*.js | awk '{print $NF}' | sort | uniq -d`.
 - Sempre escapar HTML com `esc()`. Não usar `alert`/`confirm` do navegador: usar `toast()`, `modal()` e `confirmar()`.

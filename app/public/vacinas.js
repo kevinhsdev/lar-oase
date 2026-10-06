@@ -37,9 +37,21 @@ TELAS.vacinas = async (c, arg) => {
   $('#vacImprimir', c).onclick = () => window.print();
   if (!d.linhas.length) return;
   const area = $('#vacTabela', c), busca = $('#vacBusca', c);
+  let visVac = d.linhas;
+  definirImpressao(() => ({
+    titulo: 'Situação vacinal dos residentes',
+    sub: `${filtro === 'avisos' ? 'Com dose atrasada ou vencendo' : 'Todos os residentes no lar'} · ${plural(visVac.length, 'residente', 'residentes')}`,
+    corpo: docNumeros([[`Gripe ${d.campanha.ano}`, `${d.campanha.vacinados} de ${d.campanha.total} (${pct}%)`], ['Doses atrasadas', String(atrasadas)], ['Vencem em 30 dias', String(vencendo)]])
+      + docTabela([{ t: 'Residente', w: '24%' }, ...d.principais.map((v) => ({ t: NOMES_CURTOS_VAC[v] || v, a: 'centro' }))],
+        visVac.map((l) => [`<b>${esc(l.nome)}</b>`, ...d.principais.map((v) => { const u = l.ultimas[v];
+          return u ? `${esc(dataCurta(u.data))}${u.estado !== 'em_dia' ? `<small>${docMarca(u.estado === 'atrasada' ? 'Atrasada' : 'Vence ' + dataCurta(u.vence))}</small>` : ''}` : ''; })]),
+        { vazio: 'Ninguém neste filtro.' })
+      + docNota('Data da última dose de cada vacina. Prazos: gripe todo ano, Covid a cada 6 meses, dT a cada 10 anos; as demais seguem a próxima dose anotada.'),
+  }));
   const desenhar = () => {
     const q = norm(busca.value.trim());
     const vis = d.linhas.filter((l) => (filtro === 'todos' || l.avisos.length) && (!q || norm(l.nome + ' ' + (l.apelido || '')).includes(q)));
+    visVac = vis;
     area.innerHTML = vis.length ? `<div class="tabela-caixa"><table class="tabela tabela-vac"><thead><tr><th>Residente</th>${d.principais.map((v) => `<th>${esc(NOMES_CURTOS_VAC[v] || v)}</th>`).join('')}<th></th></tr></thead><tbody>
       ${vis.map((l) => `<tr data-res="${l.id}"><td><a class="nome-link" href="#/vacinas/residente-${l.id}" style="display:flex;align-items:center;gap:10px;color:var(--texto);font-weight:600">${avatar(l.nome, 'p')}${esc(l.apelido || l.nome)}</a></td>
         ${d.principais.map((v) => { const u = l.ultimas[v]; return `<td class="num">${u ? `${esc(dataCurta(u.data))}${u.estado !== 'em_dia' ? '<br>' + etiquetaVac(u) : ''}` : '<span class="fraco">—</span>'}</td>`; }).join('')}
@@ -76,6 +88,16 @@ async function cartaoVacina(c, rid) {
     </section>`;
   $('#cvNova', c).onclick = () => formVacina(null, { residente_id: r.id });
   $('#cvImprimir', c).onclick = () => window.print();
+  definirImpressao(() => ({
+    titulo: 'Cartão de vacinação', sub: r.nome + (r.dt_nasc ? ` · nascimento ${dataBR(r.dt_nasc)}` : ''),
+    corpo: (Object.keys(d.situacao).length ? docSecao('Situação de cada vacina', docTabela([{ t: 'Vacina', w: '34%' }, { t: 'Situação', w: '26%' }, { t: 'Orientação', w: '40%' }],
+      Object.entries(d.situacao).map(([vac, s]) => [esc(vac), s.estado === 'em_dia' ? `Em dia${s.vence ? ' até ' + esc(dataBR(s.vence)) : ''}` : docMarca(s.estado === 'atrasada' ? 'Atrasada desde ' + dataBR(s.vence) : 'Vence em ' + dataBR(s.vence)),
+        esc((d.vacinas[vac] || {}).dica || '')])), 'junta') : '')
+      + docSecao('Doses aplicadas', docTabela([{ t: 'Data', w: '12%' }, { t: 'Vacina', w: '28%' }, { t: 'Dose', w: '12%' }, { t: 'Lote', w: '13%' }, { t: 'Onde', w: '20%' }, { t: 'Próxima dose', w: '15%' }],
+        d.itens.map((v) => [esc(dataBR(v.data)), esc(v.vacina), esc(v.dose || ''), esc(v.lote || ''), esc(v.local || ''), v.proxima_dose ? esc(dataBR(v.proxima_dose)) : '']),
+        { vazio: 'Nenhuma vacina registrada.' }))
+      + docAssinaturas(['Responsável pelas informações']),
+  }));
   c.addEventListener('click', async (e) => {
     const ed = e.target.closest('[data-editar-vac]');
     if (ed) formVacina(d.itens.find((v) => v.id === +ed.dataset.editarVac));

@@ -430,6 +430,9 @@ async function principal() {
   const bk = await api('POST', '/api/backups');
   conferir(bk.status === 201 && /^lar-.*\.db$/.test(bk.dados.arquivo || ''), 'faz cópia de segurança');
   conferir((await api('GET', '/api/admin/rede')).status === 200, 'lê a situação da rede');
+  conferir((await api('GET', '/api/eu')).dados.config.cnpj === '60.761.657/0001-01', 'CNPJ do lar já vem preenchido (sai no cabeçalho dos documentos)');
+  conferir((await api('PUT', '/api/admin/config', { cnpj: '60.761.657/0001-02' })).status === 400, 'CNPJ com dígito errado é recusado');
+  conferir((await api('PUT', '/api/admin/config', { cnpj: '60761657000101' })).status === 200 && (await api('GET', '/api/eu')).dados.config.cnpj === '60.761.657/0001-01', 'CNPJ só com números é aceito e formatado');
 
   // ───────────── 3. telas no Edge ─────────────
   console.log('\n3. Telas no navegador (Edge escondido)');
@@ -486,6 +489,12 @@ async function principal() {
       const abriu = await abrir(hash);
       const quebrou = abriu && await avaliar(`!!document.querySelector('#conteudo [data-tentar]')`);
       conferir(abriu && !quebrou && errosJs.length === errosAntes, `abre ${telaAtual}`);
+      if (!sufixo) { // o documento de papel (impressao.js) monta sem erro; o visual é conferido com ferramentas\imprimir-telas.mjs
+        let doc = null;
+        try { doc = await avaliar(`(() => { prepararImpressao(); const t = document.querySelector('#impressao .doc h1, #impressao .doc-recibo h2'); limparImpressao(); return t ? t.textContent : ''; })()`); }
+        catch (e) { falhou(`documento de impressão de ${hash}: ${e.message.split('\n')[0]}`); }
+        if (doc) passou(`impressão de ${hash}: “${doc}”`);
+      }
       await foto(`${nome}${sufixo ? '-' + sufixo : ''}`);
     }
   };
@@ -500,6 +509,13 @@ async function principal() {
   await foto('janela-novo-residente');
   await avaliar(`(() => { const i = document.querySelector('#rNome'); i.value = 'Residente Criado Pelo Teste'; i.dispatchEvent(new Event('input', {bubbles:true})); document.querySelector('#rQuarto').value = '3'; document.querySelector('#rSalvar').click(); })()`);
   conferir(await aguardar(`/^#\\/residente\\/\\d+$/.test(location.hash) && document.querySelector('#conteudo h1')?.textContent.includes('Criado Pelo Teste')`), 'salvar a janela cadastra e abre a ficha nova');
+  // Foto: desenha uma imagem qualquer (retângulo, para testar o recorte) e "escolhe" como se fosse um arquivo
+  await avaliar(`document.querySelector('#resFoto').click()`);
+  conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto #fotoArquivo')`), 'clicar na foto da ficha abre a janela da foto');
+  await avaliar(`(() => { const t = document.createElement('canvas'); t.width = 900; t.height = 600; const g = t.getContext('2d'); g.fillStyle = 'teal'; g.fillRect(0, 0, 900, 600);
+    t.toBlob((b) => { const dt = new DataTransfer(); dt.items.add(new File([b], 'teste.png', { type: 'image/png' })); const i = document.querySelector('#fotoArquivo'); i.files = dt.files; i.dispatchEvent(new Event('change')); }, 'image/png'); })()`);
+  conferir(await aguardar(`!document.querySelector('.modal-fundo') && !!document.querySelector('.foto-perfil img')?.complete && document.querySelector('.foto-perfil img').naturalWidth === 512`), 'foto escolhida aparece na ficha (recortada em 512 px)');
+  await foto('ficha-com-foto');
   await avaliar(`document.querySelector('#contatoNovo').click()`);
   conferir(await aguardar(`!!document.querySelector('.modal-fundo.aberto #cNome') && document.querySelector('#cResp').checked`), 'primeiro familiar já vem marcado como responsável');
   await avaliar(`(() => { document.querySelector('#cNome').value = 'Familiar do Teste'; document.querySelector('#cTel').value = '(11) 90000-9999'; document.querySelector('#cSalvar').click(); })()`);

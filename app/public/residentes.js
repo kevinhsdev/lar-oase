@@ -28,7 +28,14 @@ async function residentesParaBusca() {
   return cacheResidentes;
 }
 const esquecerResidentes = () => { cacheResidentes = null; };
+// Avatar com a foto, se tiver; sem foto, as iniciais coloridas de sempre.
+// O ?v= muda a cada foto nova: o navegador guarda a imagem e só baixa de novo quando ela for trocada.
+const avatarRes = (r, tam = '', extra = '') => (r.foto_em
+  ? `<span class="avatar com-foto ${tam} ${extra}" aria-hidden="true"><img src="/api/residentes/${r.id}/foto?v=${encodeURIComponent(r.foto_em)}" alt="" loading="lazy" decoding="async"></span>`
+  : avatar(r.nome, tam, extra));
 const inativoRes = (r) => r.situacao === 'saiu' || r.situacao === 'faleceu';
+// No papel, sem o "(a)": usa o sexo da ficha quando houver
+const situacaoNoPapel = (r) => (r.situacao === 'hospitalizado' && r.sexo ? (r.sexo === 'F' ? 'Hospitalizada' : 'Hospitalizado') : rotuloSituacao(r.situacao));
 const passaFiltroRes = (r, f) => (f === 'todos' ? true : f === 'atuais' ? !inativoRes(r) : f === 'historico' ? inativoRes(r) : r.situacao === f);
 let vistaRes = (() => { try { return localStorage.getItem('lar-vista-res') === 'lista' ? 'lista' : 'cartoes'; } catch { return 'cartoes'; } })();
 let buscaRes = '';
@@ -39,7 +46,7 @@ function cartaoResidente(r) {
   const sub = [r.apelido, inativo && r.situacao_desde ? `${rotuloSituacao(r.situacao)} em ${dataBR(r.situacao_desde)}` : ''].filter(Boolean).join(' · ');
   return `<article class="res-cartao${inativo ? ' inativo' : ''}">
     ${r.situacao !== 'no_lar' ? `<span class="situ">${etiquetaSituacao(r.situacao)}</span>` : ''}
-    <div class="cab">${avatar(r.nome, 'g', inativo ? 'apagado' : '')}<div class="nome"><a href="#/residente/${r.id}">${esc(r.nome)}</a>${sub ? `<small>${esc(sub)}</small>` : ''}</div></div>
+    <div class="cab">${avatarRes(r, 'g', inativo ? 'apagado' : '')}<div class="nome"><a href="#/residente/${r.id}">${esc(r.nome)}</a>${sub ? `<small>${esc(sub)}</small>` : ''}</div></div>
     <div class="pilulas">${r.idade != null ? `<span class="pilula">${r.idade} anos</span>` : ''}${r.quarto ? `<span class="pilula">${icone('cama')}Quarto ${esc(r.quarto)}${r.leito ? ' · ' + esc(r.leito) : ''}</span>` : ''}${
       r.grau_dependencia ? `<span class="pilula">Grau ${esc(r.grau_dependencia)}</span>` : ''}${r.alergias ? `<span class="etiqueta perigo" title="Alergia: ${esc(r.alergias)}">${icone('alerta')}Alergia</span>` : ''}</div>
     <div class="resp">${r.resp_nome ? `<span class="meio"><b>${esc(r.resp_nome)}</b>${r.resp_parentesco ? ' · ' + esc(r.resp_parentesco) : ''}</span>${foneLink(r.resp_telefone)}`
@@ -48,7 +55,7 @@ function cartaoResidente(r) {
 }
 function linhaResidente(r) {
   const inativo = inativoRes(r);
-  return `<div class="linha">${avatar(r.nome, 'p', inativo ? 'apagado' : '')}
+  return `<div class="linha">${avatarRes(r, 'p', inativo ? 'apagado' : '')}
     <span class="meio"><a class="nome-link" href="#/residente/${r.id}">${esc(r.nome)}</a><small>${esc(r.apelido || '')}${r.alergias ? ' · alergia' : ''}</small></span>
     <span class="col sempre">${r.idade != null ? r.idade + ' anos' : '—'}</span>
     <span class="col">${r.quarto ? 'Quarto ' + esc(r.quarto) + (r.leito ? ' · ' + esc(r.leito) : '') : '—'}</span>
@@ -87,9 +94,24 @@ TELAS.residentes = async (c, arg) => {
 
   const area = $('#resArea', c), busca = $('#resBusca', c);
   busca.value = buscaRes;
+  let visiveis = lista;
+  // Papel: a relação de quem está na tela agora (mesmo filtro e busca), em tabela
+  const ROTULO_FILTRO = { atuais: 'Residentes atuais (no lar e hospitalizados)', no_lar: 'No lar', hospitalizado: 'Hospitalizados', historico: 'Histórico (saíram ou faleceram)', todos: 'Todos os cadastrados' };
+  definirImpressao(() => ({
+    titulo: 'Relação de residentes',
+    sub: `${ROTULO_FILTRO[filtro]} · ${plural(visiveis.length, 'pessoa', 'pessoas')}${busca.value.trim() ? ` · busca: “${busca.value.trim()}”` : ''}`,
+    corpo: docTabela([{ t: 'Nº', w: '4%', a: 'dir' }, { t: 'Residente', w: '25%' }, { t: 'Nascimento', w: '12%' }, { t: 'Quarto', w: '8%' }, { t: 'Grau', w: '6%', a: 'centro' },
+      { t: 'Entrada', w: '11%' }, { t: 'Responsável', w: '21%' }, { t: 'Situação', w: '13%' }],
+    visiveis.map((r, i) => [String(i + 1), `<b>${esc(r.nome)}</b>${r.apelido ? `<small>“${esc(r.apelido)}”</small>` : ''}${r.alergias ? `<small>Alergia: ${esc(r.alergias)}</small>` : ''}`,
+      r.dt_nasc ? `${esc(dataBR(r.dt_nasc))}<small>${r.idade} anos</small>` : '', esc([r.quarto, r.leito].filter(Boolean).join(' · ')), esc(r.grau_dependencia || ''),
+      esc(r.dt_entrada ? dataBR(r.dt_entrada) : ''), r.resp_nome ? `${esc(r.resp_nome)}${r.resp_parentesco ? ` <span class="doc-vazio">(${esc(r.resp_parentesco)})</span>` : ''}<small>${esc(r.resp_telefone || '')}</small>` : '',
+      `<span class="doc-nw">${esc(situacaoNoPapel(r))}</span>` + (r.situacao !== 'no_lar' && r.situacao_desde ? `<small>desde ${esc(dataBR(r.situacao_desde))}</small>` : '')]),
+    { vazio: 'Nenhum residente neste filtro.' }),
+  }));
   const desenhar = (animar) => {
     const q = norm(busca.value.trim());
     const vis = lista.filter((r) => passaFiltroRes(r, filtro) && (!q || norm([r.nome, r.apelido, r.quarto ? 'quarto ' + r.quarto : '', r.resp_nome, r.cpf].join(' ')).includes(q)));
+    visiveis = vis;
     if (!vis.length) {
       area.innerHTML = `<div class="cartao">${q ? vazio('busca', 'Ninguém encontrado', `Nenhum residente combina com “${esc(busca.value.trim())}” neste filtro.`, '<button type="button" class="btn" data-limpar>Limpar a busca</button>')
         : vazio('residentes', 'Nada por aqui', filtro === 'hospitalizado' ? 'Ninguém hospitalizado no momento.' : filtro === 'historico' ? 'Quem sair do lar ou falecer continua com a ficha guardada aqui.' : 'Nenhum residente neste filtro.')}</div>`;
@@ -152,7 +174,8 @@ TELAS.residente = async (c, id) => {
     <a class="voltar" href="#/residentes">${icone('voltar')}Residentes</a>
     <div class="so-impressao cabecalho-impressao"><b>${esc(EU.config.nome_organizacao || SUBTITULO_APP)} — Ficha do residente</b><span>Impresso em ${esc(dataHoraBR(new Date().toISOString()))} por ${esc(EU.nome)}</span></div>
     <section class="cartao perfil">
-      <div class="quem">${avatar(r.nome, 'xg', inativo ? 'apagado' : '')}<div style="min-width:0"><h1>${esc(r.nome)}</h1>${r.apelido ? `<p class="apelido">“${esc(r.apelido)}”</p>` : ''}
+      <div class="quem"><button type="button" class="foto-perfil" id="resFoto" title="${r.foto_em ? 'Trocar a foto' : 'Pôr uma foto'}" aria-label="Foto de ${esc(r.nome)}">${
+        avatarRes(r, 'xg', inativo ? 'apagado' : '')}<span class="selo-foto nao-imprimir" aria-hidden="true">${icone('camera')}</span></button><div style="min-width:0"><h1>${esc(r.nome)}</h1>${r.apelido ? `<p class="apelido">“${esc(r.apelido)}”</p>` : ''}
         <div class="pilulas">${pilulas}</div>${nota ? `<p class="so-impressao" style="margin-top:8px"><b>${esc(nota)}</b></p>` : ''}</div></div>
       <div class="lado nao-imprimir">
         ${segmentado(Object.entries(d.situacoes).map(([v, rot]) => ({ v, rotulo: v === 'hospitalizado' ? 'Hospitalizado' : rot })), r.situacao, { classe: 'situacao', rotulo: 'Situação do residente' })}
@@ -233,6 +256,8 @@ TELAS.residente = async (c, id) => {
     </section>`;
 
   $('#resEditar', c).onclick = () => formResidente(r);
+  $('#resFoto', c).onclick = () => janelaFoto(r);
+  definirImpressao(() => docFichaResidente(r, cs, { rx: rx.itens, vac, sv, avs, ag: ag.itens, dia: dia.itens }));
   $('#resImprimirFicha', c).onclick = () => window.print();
   if ($('#resMais', c)) {
     $('#resMais', c).onclick = (e) => {
@@ -264,6 +289,54 @@ TELAS.residente = async (c, id) => {
   });
 };
 
+// ───────────── ficha impressa ─────────────
+const sexoRes = (s) => (s === 'F' ? 'Feminino' : s === 'M' ? 'Masculino' : '');
+// Identificação (foto + campos) — também usada no prontuário
+function docIdentResidente(r) {
+  return `<div class="doc-ident">${r.foto_em ? `<img class="doc-foto" src="/api/residentes/${r.id}/foto?v=${encodeURIComponent(r.foto_em)}" alt="">` : ''}
+    ${docCampos([['Nome completo', r.nome, 2], ['Como é chamado(a)', r.apelido],
+      ['Nascimento', r.dt_nasc ? `${dataBR(r.dt_nasc)} (${r.idade} anos)` : ''], ['Sexo', sexoRes(r.sexo)], ['Estado civil', r.estado_civil],
+      ['CPF', r.cpf], ['RG', r.rg], ['Cartão SUS', r.cartao_sus],
+      ['Naturalidade', r.naturalidade], ['Religião', r.religiao], ['Situação', situacaoNoPapel(r) + (r.situacao !== 'no_lar' && r.situacao_desde ? ` desde ${dataBR(r.situacao_desde)}` : '')]], 3)}</div>`;
+}
+// Familiares e contatos em tabela
+const docTabelaContatos = (cs) => docTabela([{ t: 'Nome', w: '26%' }, { t: 'Parentesco', w: '13%' }, { t: 'Telefones', w: '19%' }, { t: 'E-mail / endereço', w: '28%' }, { t: 'Papel', w: '14%' }],
+  cs.map((x) => [`<b>${esc(x.nome)}</b>${x.obs ? `<small>${esc(x.obs)}</small>` : ''}`, esc(x.parentesco || ''), [x.telefone, x.telefone2].filter(Boolean).map((t) => `<span class="doc-nw">${esc(t)}</span>`).join('<br>'),
+    esc([x.email, x.endereco].filter(Boolean).join(' · ')), [x.responsavel ? 'Responsável' : '', x.emergencia ? 'Emergência' : ''].filter(Boolean).join('<br>')]),
+  { vazio: 'Nenhum familiar ou contato cadastrado.' });
+
+function docFichaResidente(r, cs, { rx, vac, sv, avs, ag, dia }) {
+  const ultimaSv = sv.itens[sv.itens.length - 1];
+  const nomeAv = (k) => avs.escalas[k].nome;
+  return {
+    titulo: 'Ficha do residente', sub: r.nome,
+    corpo: `${docIdentResidente(r)}
+      ${r.alergias ? docAlerta(`<b>Alergias:</b> ${esc(r.alergias)}`) : ''}
+      ${docSecao('Acolhimento', docCampos([['Entrada no lar', r.dt_entrada ? dataBR(r.dt_entrada) : ''], ['Tempo no lar', r.dt_entrada ? tempoDesde(r.dt_entrada) : ''],
+        ['Quarto', r.quarto], ['Leito', r.leito]], 4))}
+      ${docSecao('Saúde', docCampos([['Grau de dependência', r.grau_dependencia ? `Grau ${r.grau_dependencia} — ${GRAUS_RES[r.grau_dependencia] || ''}` : '', 3],
+        ['Mobilidade', r.mobilidade], ['Tipo sanguíneo', r.tipo_sanguineo], ['Dieta', r.dieta],
+        ['Diagnósticos e doenças', r.diagnosticos, 3],
+        ['Convênio', r.convenio], ['Nº do convênio', r.convenio_numero], ['Médico(a) de referência', [r.medico, r.medico_tel].filter(Boolean).join(' · ')]], 3))}
+      ${docSecao('Familiares e contatos', docTabelaContatos(cs))}
+      ${docSecao('Remédios em uso', docTabelaRemedios(rx))}
+      ${docSecao('Avaliações (as mais recentes)', docTabela([{ t: 'Escala', w: '30%' }, { t: 'Pontos', w: '12%', a: 'dir' }, { t: 'Resultado', w: '38%' }, { t: 'Data', w: '20%' }],
+        ['katz', 'braden', 'morse'].map((k) => { const a = avs.itens.find((x) => x.escala === k);
+          return [esc(avs.escalas[k].titulo || nomeAv(k)), a ? String(a.pontuacao) : '', a ? esc(a.classificacao) : '<span class="doc-vazio">não avaliado</span>', a ? esc(dataBR(a.data)) : '']; })), 'junta')}
+      ${docSecao('Sinais vitais', ultimaSv ? `<p style="margin:0">Última medida: <b>${esc(dataBR(ultimaSv.data))} às ${esc(ultimaSv.hora)}</b> — ${esc(resumoLeitura(ultimaSv))}${ultimaSv.fora.length ? ' ' + docMarca(nomesFora(ultimaSv.fora, sv.medidas) + ' fora do normal') : ''}.
+        ${plural(sv.itens.length, 'medida', 'medidas')} nos últimos 30 dias.</p>` : '<p class="doc-nada">Nenhuma medida nos últimos 30 dias.</p>', 'junta')}
+      ${docSecao('Vacinas', docTabela([{ t: 'Vacina', w: '40%' }, { t: 'Última dose', w: '20%' }, { t: 'Situação', w: '40%' }],
+        Object.entries(vac.situacao).map(([nome, s]) => { const u = vac.itens.find((x) => x.vacina === nome);
+          return [esc(nome), esc(u ? dataBR(u.data) : ''), s.estado === 'em_dia' ? `Em dia${s.vence ? ' até ' + esc(dataBR(s.vence)) : ''}` : docMarca(s.estado === 'atrasada' ? 'Atrasada' : 'Vence ' + dataBR(s.vence))]; }),
+        { vazio: 'Nenhuma vacina registrada.' }), 'junta')}
+      ${docSecao('Próximos compromissos', docTabela([{ t: 'Data', w: '24%' }, { t: 'Tipo', w: '14%' }, { t: 'Compromisso', w: '36%' }, { t: 'Local', w: '26%' }],
+        ag.map((a) => [`${esc(dataBR(a.data))}<small>${esc(horarioAg(a))}</small>`, esc((TIPOS_AG[a.tipo] || TIPOS_AG.outro).nome), esc(a.titulo), esc(a.local || '')]),
+        { vazio: 'Nenhum compromisso marcado.' }))}
+      ${docSecao('Últimas anotações do diário', docTabelaDiario(dia, { comResidente: false }))}
+      ${r.obs ? docSecao('Observações', `<p style="margin:0" class="doc-quebras">${esc(r.obs)}</p>`) : ''}`,
+  };
+}
+
 async function excluirResidente(r) {
   const ok = await confirmar(`Excluir apaga de vez a ficha de ${r.nome} e todos os familiares dela. Não dá para desfazer. `
     + 'Se a pessoa saiu do lar ou faleceu, o certo é mudar a situação: a ficha fica guardada como histórico.', 'Excluir de vez', { perigo: true, titulo: 'Excluir a ficha?' });
@@ -274,6 +347,76 @@ async function excluirResidente(r) {
     toast(`A ficha de ${r.nome} foi excluída.`);
     location.hash = '#/residentes';
   } catch (e) { toast(e.message, true); }
+}
+
+// ───────────── foto ─────────────
+// Recorta um quadrado do meio, diminui para no máximo 512 px e transforma em JPEG:
+// a foto do celular (3 a 5 MB) vira uns 40 KB e o banco não incha. Lê como data: porque a regra de segurança da página só aceita imagem assim.
+function prepararFoto(arquivo) {
+  return new Promise((ok, erro) => {
+    if (!/^image\//.test(arquivo.type || 'image/')) { erro(new Error('Escolha um arquivo de imagem (foto JPG ou PNG).')); return; }
+    if (arquivo.size > 30 * 1024 * 1024) { erro(new Error('Essa imagem é grande demais (mais de 30 MB).')); return; }
+    const leitor = new FileReader();
+    leitor.onerror = () => erro(new Error('Não consegui ler esse arquivo.'));
+    leitor.onload = () => {
+      const img = new Image();
+      img.onerror = () => erro(new Error('O navegador não consegue abrir esse tipo de imagem. Use uma foto JPG ou PNG.'));
+      img.onload = () => {
+        const lado = Math.min(img.naturalWidth, img.naturalHeight);
+        const tam = Math.min(512, lado);
+        const tela = document.createElement('canvas');
+        tela.width = tela.height = tam;
+        const g = tela.getContext('2d');
+        g.fillStyle = '#fff'; // PNG com fundo transparente ficaria preto no JPEG (é cor da imagem, não da interface)
+        g.fillRect(0, 0, tam, tam);
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, (img.naturalWidth - lado) / 2, (img.naturalHeight - lado) / 2, lado, lado, 0, 0, tam, tam);
+        tela.toBlob((b) => (b ? ok(b) : erro(new Error('Não consegui preparar a foto.'))), 'image/jpeg', 0.85);
+      };
+      img.src = leitor.result;
+    };
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+function janelaFoto(r) {
+  const tem = !!r.foto_em;
+  const j = modal(`Foto — ${r.apelido || r.nome}`, `<div class="janela-foto">${avatarRes(r, 'xg', inativoRes(r) ? 'apagado' : '')}
+      <input type="file" id="fotoArquivo" accept="image/*" hidden>
+      <p class="dica">${tem ? 'Para trocar, escolha outra foto.' : 'Escolha uma foto do computador ou, no celular, tire na hora.'}
+        O sistema recorta o meio da foto e diminui sozinho. Prefira uma foto de rosto, de frente e com boa luz.</p></div>`, {
+    tamanho: 'estreito', rascunho: false,
+    rodape: `${tem ? `<button type="button" class="btn" id="fotoRemover">${icone('lixo')}Remover</button>` : ''}<button type="button" class="btn" data-fechar>Fechar</button>
+      <button type="button" class="btn primario" id="fotoEscolher">${icone('camera')}${tem ? 'Trocar a foto' : 'Escolher foto'}</button>`,
+  });
+  const arquivo = $('#fotoArquivo', j.el), escolher = $('#fotoEscolher', j.el);
+  escolher.onclick = () => arquivo.click();
+  arquivo.onchange = () => {
+    const f = arquivo.files[0];
+    arquivo.value = ''; // deixa escolher a mesma foto de novo, se der erro
+    if (!f) return;
+    botaoOcupado(escolher, async () => {
+      const blob = await prepararFoto(f);
+      await api('PUT', `/api/residentes/${r.id}/foto`, undefined, blob);
+      esquecerResidentes();
+      j.fechar(true);
+      toast(tem ? 'Foto trocada.' : 'Foto colocada.');
+      rotear();
+    });
+  };
+  if ($('#fotoRemover', j.el)) {
+    $('#fotoRemover', j.el).onclick = async (e) => {
+      const btn = e.currentTarget;
+      if (!(await confirmar(`Tirar a foto de ${r.nome}? Volta a aparecer só as iniciais.`, 'Remover', { perigo: true, titulo: 'Remover a foto?' }))) return;
+      botaoOcupado(btn, async () => {
+        await api('DELETE', `/api/residentes/${r.id}/foto`);
+        esquecerResidentes();
+        j.fechar(true);
+        toast('Foto removida.');
+        rotear();
+      });
+    };
+  }
 }
 
 // Mudar a situação: pede a data (e o motivo). Devolve true se gravou.
@@ -322,7 +465,7 @@ function formResidente(r) {
   const titulo = novo ? 'Novo residente' : `Editar — ${r.nome}`;
   const campo = (id, rotulo, extra = '', classe = '') => `<label class="campo ${classe}"><span>${rotulo}</span><input id="${id}" ${extra}></label>`;
   const j = modal(titulo, `
-    <div class="previa"><span id="previaAv">${avatar(r ? r.nome : '?', 'g')}</span><div><b id="previaNome">${esc(r ? r.nome : 'Novo residente')}</b><small id="previaInfo">Só o nome é obrigatório: o resto pode ser completado depois.</small></div></div>
+    <div class="previa"><span id="previaAv">${r ? avatarRes(r, 'g') : avatar('?', 'g')}</span><div><b id="previaNome">${esc(r ? r.nome : 'Novo residente')}</b><small id="previaInfo">Só o nome é obrigatório: o resto pode ser completado depois.</small></div></div>
     <fieldset><legend>${icone('usuario')}Identificação</legend><div class="grade-campos">
       <label class="campo meio"><span class="obrig">Nome completo</span><input id="rNome" maxlength="120" autocomplete="off" required></label>
       ${campo('rApelido', 'Como gosta de ser chamado(a)', 'maxlength="60" placeholder="Ex.: Dona Aurora"')}
@@ -375,7 +518,7 @@ function formResidente(r) {
         const q = $('#rQuarto', el).value.trim();
         let idade = null;
         if (nasc) { const [a, m, d] = nasc.split('-').map(Number); const h = new Date(); idade = h.getFullYear() - a - (h.getMonth() + 1 < m || (h.getMonth() + 1 === m && h.getDate() < d) ? 1 : 0); }
-        $('#previaAv', el).innerHTML = avatar(nome || '?', 'g');
+        if (!(r && r.foto_em)) $('#previaAv', el).innerHTML = avatar(nome || '?', 'g'); // com foto, a foto fica
         $('#previaNome', el).textContent = nome || (novo ? 'Novo residente' : '—');
         const info = [apel && `“${apel}”`, idade != null && idade >= 0 && idade < 130 && `${idade} anos`, q && `quarto ${q}`].filter(Boolean).join(' · ');
         $('#previaInfo', el).textContent = info || (nome ? 'Complete o que souber. O resto pode ficar para depois.' : 'Só o nome é obrigatório: o resto pode ser completado depois.');

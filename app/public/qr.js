@@ -1,6 +1,6 @@
 // Gerador de QR Code sem biblioteca externa (o app funciona sem internet).
 // Segue a norma ISO/IEC 18004: modo byte (UTF-8), correção de erro nível M, versões 1 a 10 (até 213 bytes —
-// sobra para um endereço como http://192.168.100.200:3000). Uso: gerarQR(texto) → texto <svg>.
+// sobra para um endereço como http://192.168.100.200:3001). Uso: gerarQR(texto) → texto <svg>.
 // Conferido com o leitor de QR do OpenCV (ver HANDOFF, versão 5.5.0).
 'use strict';
 

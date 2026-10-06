@@ -75,11 +75,32 @@ TELAS.estoque = async (c, arg) => {
   if (!itens.length) return;
   const area = $('#estArea', c), busca = $('#estBusca', c);
   busca.value = buscaEst;
+  let visEst = itens;
+  // Papel: inventário por categoria, com uma coluna em branco para a contagem física
+  definirImpressao(() => {
+    const cats = Object.keys(CATS_EST).filter((k) => visEst.some((p) => p.categoria === k));
+    const avisoTxt = (p) => [p.zerado ? 'Acabou' : p.acabando ? 'Acabando' : '', p.vencido > 0 ? `Vencido: ${qtdEst(p.vencido, p.unidade)}` : p.vencendo > 0 ? 'Vencendo' : '',
+      p.dias_restantes != null && !p.zerado ? `dá para ${p.dias_restantes} dia(s)` : ''].filter(Boolean);
+    return {
+      titulo: 'Inventário do estoque',
+      sub: `${filtro === 'todos' ? 'Todos os itens' : filtro === 'avisos' ? 'Itens que precisam de atenção' : CATS_EST[filtro].nome} · ${plural(visEst.length, 'item', 'itens')}${buscaEst.trim() ? ` · busca: “${buscaEst.trim()}”` : ''}`,
+      corpo: docTabela([{ t: 'Item', w: '30%' }, { t: 'Local', w: '15%' }, { t: 'Saldo', w: '13%', a: 'dir' }, { t: 'Mínimo', w: '9%', a: 'dir' }, { t: 'Próx. validade', w: '11%' },
+        { t: 'Aviso', w: '12%' }, { t: 'Contagem', w: '10%' }],
+      cats.flatMap((k) => [{ grupo: CATS_EST[k].nome }, ...visEst.filter((p) => p.categoria === k).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((p) => [
+        `<b>${esc(p.nome)}</b>${p.residente_nome ? `<small>Item pessoal de ${esc(p.residente_nome)}</small>` : ''}`, esc(p.local || ''), `<b>${esc(qtdEst(p.saldo, p.unidade))}</b>`,
+        p.estoque_minimo != null ? esc(numEst(p.estoque_minimo)) : '', p.proxima_validade ? esc(dataBR(p.proxima_validade)) : '',
+        avisoTxt(p).map((t) => docMarca(t)).join(' '), ''])]),
+      { classe: 'grade compacta', vazio: 'Nenhum item neste filtro.' })
+        + docNota('Coluna “Contagem”: anote quanto há na prateleira ao conferir. Depois lance a diferença no sistema em “Contar”.')
+        + docAssinaturas(['Conferido por', 'Data da conferência']),
+    };
+  });
   const desenhar = () => {
     const q = norm(buscaEst.trim());
     const vis = itens.filter((p) => (filtro === 'todos' || (filtro === 'avisos' ? p.alerta : p.categoria === filtro)) && (!q || norm([p.nome, p.local, p.residente_nome].join(' ')).includes(q)))
       // o que precisa de atenção primeiro
       .sort((a, b) => (filtro === 'avisos' ? 0 : b.alerta - a.alerta) || (b.zerado - a.zerado) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    visEst = vis;
     area.innerHTML = vis.length ? `<div class="cartao est-lista">${vis.map(linhaEst).join('')}</div>`
       : `<div class="cartao">${q ? vazio('busca', 'Nada encontrado', `Nenhum item com “${esc(buscaEst.trim())}”.`) : vazio('check', 'Tudo em dia', 'Nenhum item acabando ou vencendo.')}</div>`;
   };
@@ -139,6 +160,23 @@ async function telaItemEstoque(c, id) {
             <td class="acoes-td">${podeDesfazer ? `<button type="button" class="btn-icone nao-imprimir" data-desfazer="${m.id}" title="Desfazer este lançamento" aria-label="Desfazer este lançamento">${icone('restaurar')}</button>` : ''}</td></tr>`;
         }).join('')}</tbody></table></div>` : `<div style="padding:0 20px 20px"><p class="mudo">Nenhuma movimentação ainda.</p></div>`}
     </section>`;
+  definirImpressao(() => ({
+    titulo: 'Ficha de estoque', sub: p.nome,
+    corpo: docCampos([['Item', p.nome, 2], ['Categoria', cat.nome], ['Local', p.local], ['Saldo atual', qtdEst(p.saldo, p.unidade)],
+      ['Estoque mínimo', p.estoque_minimo != null ? qtdEst(p.estoque_minimo, p.unidade) : 'não definido'], ['Item pessoal de', p.residente_nome || ''],
+      ['Situação', p.ativo ? (p.zerado ? 'Acabou' : p.acabando ? 'Acabando' : 'Em dia') : 'Arquivado']], 4)
+      + (p.obs ? docSecao('Observações', `<p style="margin:0" class="doc-quebras">${esc(p.obs)}</p>`) : '')
+      + docSecao('Validades (o que ainda resta de cada entrada)', docTabela([{ t: 'Quantidade', w: '30%' }, { t: 'Entrada em', w: '25%' }, { t: 'Validade', w: '25%' }, { t: '', w: '20%' }],
+        p.lotes.filter((l) => l.validade).map((l) => { const dias = -diasDesde(l.validade);
+          return [esc(qtdEst(l.resta, p.unidade)), esc(dataBR(l.data)), esc(dataBR(l.validade)), dias < 0 ? docMarca('Vencido') : dias <= 30 ? docMarca('Vence em breve') : '']; }),
+        { vazio: 'Nenhuma validade registrada.' }), 'junta')
+      + docSecao('Movimentações', docTabela([{ t: 'Dia', w: '12%' }, { t: 'Lançamento', w: '13%' }, { t: 'Quantidade', w: '13%', a: 'dir' }, { t: 'Detalhe', w: '42%' }, { t: 'Quem', w: '20%' }],
+        d.movimentos.map((m) => { const q = m.tipo === 'saida' ? -m.quantidade : m.quantidade;
+          return [esc(dataBR(m.data)), esc(tipoMov[m.tipo][0]), `${q > 0 ? '+' : ''}${esc(numEst(q))}`,
+            esc([m.origem, m.validade ? 'validade ' + dataBR(m.validade) : '', m.residente_nome ? 'para ' + m.residente_nome : '', m.obs].filter(Boolean).join(' · ')),
+            esc(nomeAutorDia({ autor_nome: m.autor_nome, criado_por: m.criado_por }))]; }),
+        { classe: 'compacta', vazio: 'Nenhuma movimentação ainda.' })),
+  }));
   $('#itEntrada', c).onclick = () => janelaMovimento(p, 'entrada');
   $('#itSaida', c).onclick = () => janelaMovimento(p, 'saida');
   $('#itContar', c).onclick = () => janelaMovimento(p, 'contagem');

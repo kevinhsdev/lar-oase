@@ -38,9 +38,27 @@ TELAS.patrimonio = async (c, arg) => {
   if (!lista) return;
   const busca = $('#patBusca', c);
   busca.value = buscaPat;
+  let visPat = d.itens;
+  // Papel: inventário patrimonial por local, com coluna para conferir
+  definirImpressao(() => {
+    const grupos = {};
+    for (const p of visPat) (grupos[p.local || 'Sem local definido'] ||= []).push(p);
+    const valorVis = visPat.reduce((s, p) => s + (p.valor || 0), 0);
+    return {
+      titulo: 'Inventário patrimonial',
+      sub: `${filtro === 'avisos' ? 'Itens que precisam de atenção' : todos ? 'Todos os itens, inclusive baixados' : 'Itens em uso'} · ${plural(visPat.length, 'item', 'itens')}${valorVis ? ' · valor estimado ' + reais(valorVis) : ''}`,
+      corpo: docTabela([{ t: 'Nº / código', w: '11%' }, { t: 'Item', w: '25%' }, { t: 'Categoria', w: '13%' }, { t: 'Estado', w: '12%' }, { t: 'Próx. revisão', w: '12%' },
+        { t: 'Valor', w: '12%', a: 'dir' }, { t: 'Conferido', w: '15%', a: 'centro' }],
+      Object.entries(grupos).sort(([a], [b]) => (a === 'Sem local definido') - (b === 'Sem local definido') || a.localeCompare(b, 'pt-BR')).flatMap(([local, ps]) => [{ grupo: `${local} · ${ps.length}` },
+        ...ps.map((p) => [esc(p.codigo || ''), `<b>${esc(p.nome)}</b>${p.residente_nome ? `<small>Em uso por ${esc(p.residente_nome)}</small>` : ''}`, esc(p.categoria), esc(d.estados[p.estado]),
+          p.proxima_revisao ? `${esc(dataBR(p.proxima_revisao))}${p.revisao === 'vencida' ? '<br>' + docMarca('Vencida') : ''}` : '', p.valor != null ? esc(reais(p.valor)) : '', '<span class="doc-quadro"></span>'])]),
+      { classe: 'compacta', vazio: 'Nenhum item neste filtro.' }) + docAssinaturas(['Conferido por', 'Responsável pela instituição']),
+    };
+  });
   const desenhar = () => {
     const q = norm(buscaPat.trim());
     const vis = d.itens.filter((p) => (filtro === 'todos' || p.alerta) && (!q || norm([p.nome, p.codigo, p.local, p.categoria, p.residente_nome].join(' ')).includes(q)));
+    visPat = vis;
     const grupos = {};
     for (const p of vis) (grupos[p.local || 'Sem local definido'] ||= []).push(p);
     const semLocal = (l) => (l === 'Sem local definido' ? 1 : 0);

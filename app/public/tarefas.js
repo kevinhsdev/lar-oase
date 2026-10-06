@@ -39,6 +39,15 @@ TELAS.tarefas = async (c, arg) => {
       : `<div class="cartao">${vazio('check', 'Nenhuma tarefa', minhas ? 'Nada com você por enquanto.' : 'Anote aqui o que a equipe precisa fazer: ligar para família, comprar algo, consertar, organizar.', `<button type="button" class="btn primario" data-nova-tf>${icone('mais')}Nova tarefa</button>`)}</div>`}</div>`;
   $('#tfNova', c).onclick = () => formTarefa(null, d);
   $('#tfImprimir', c).onclick = () => window.print();
+  definirImpressao(() => ({
+    titulo: minhas ? 'Minhas tarefas' : 'Tarefas da equipe',
+    sub: `${plural(abertas.length, 'tarefa aberta', 'tarefas abertas')}${d.resumo.atrasadas ? ` · ${plural(d.resumo.atrasadas, 'atrasada', 'atrasadas')}` : ''}`,
+    corpo: docTabela([{ t: 'Feita', w: '7%', a: 'centro' }, { t: 'Tarefa', w: '37%' }, { t: 'Prazo', w: '12%' }, { t: 'Responsável', w: '17%' }, { t: 'Residente', w: '15%' }, { t: 'Repete', w: '12%' }],
+      grupos.flatMap(([nome, ts]) => [{ grupo: `${nome} · ${ts.length}` }, ...ts.map((t) => [t.feita ? '✓' : '<span class="doc-quadro"></span>',
+        `<b>${esc(t.titulo)}</b>${t.prioridade === 'alta' && !t.feita ? ' ' + docMarca('Urgente') : ''}${t.detalhe ? `<small>${esc(t.detalhe)}</small>` : ''}${t.feita ? `<small>feita por ${esc(nomeAutorDia({ autor_nome: t.feita_por_nome, criado_por: t.feita_por }))} em ${esc(dataHoraBR(t.feita_em))}</small>` : ''}`,
+        esc(t.prazo ? dataBR(t.prazo) : ''), esc(t.responsavel ? t.responsavel_nome || t.responsavel : 'Equipe toda'), esc(t.residente_id ? t.residente_nome || '' : ''), esc(t.repetir ? d.repetir[t.repetir] : '')])]),
+      { vazio: 'Nenhuma tarefa.' }),
+  }));
   ligarSegmentado($('.filtroTf', c), (v) => { location.hash = v === 'minhas' ? '#/tarefas/minhas' : '#/tarefas'; });
   c.addEventListener('click', async (e) => {
     if (e.target.closest('[data-nova-tf]')) return formTarefa(null, d);

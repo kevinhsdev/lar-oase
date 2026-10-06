@@ -41,8 +41,6 @@
   --graf-2: #c2561a;
   --graf-grade: #ece8e0;
   --graf-faixa: rgba(45, 122, 76, 0.09);
-  --oase: #8e1b2f;
-  --oase-suave: #e8c9ce;
   --selo-fundo: #ffffff;
 
   /* Estados */
@@ -329,6 +327,22 @@ legend svg.ic { width: 16px; height: 16px; color: var(--marca); }
 .avatar.av5 { background: var(--av5-f); color: var(--av5-t); } .avatar.av6 { background: var(--av6-f); color: var(--av6-t); }
 .avatar.av7 { background: var(--av7-f); color: var(--av7-t); }
 .avatar.apagado { filter: grayscale(1); opacity: 0.7; }
+/* Foto do residente no lugar das iniciais (o fundo aparece enquanto a imagem carrega) */
+.avatar.com-foto { overflow: hidden; }
+.avatar.com-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Foto da ficha: clicar troca. O selo da câmera diz que dá para mexer. */
+.foto-perfil { position: relative; flex: none; padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; transition: transform 160ms var(--saida, ease-out); }
+.foto-perfil:active { transform: scale(0.96); }
+.foto-perfil:focus-visible { outline: 3px solid var(--marca); outline-offset: 3px; }
+.foto-perfil .selo-foto {
+  position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--superficie); color: var(--marca); border: 1px solid var(--borda); box-shadow: var(--sombra-1);
+}
+.foto-perfil .selo-foto .ic { width: 16px; height: 16px; }
+@media (hover: hover) { .foto-perfil:hover .selo-foto { background: var(--marca); color: var(--superficie); border-color: var(--marca); } }
+.janela-foto { display: grid; justify-items: center; gap: 14px; text-align: center; }
+.janela-foto .avatar { --tam: 180px; }
+.janela-foto .dica { max-width: 340px; }
 
 /* ───────────── casca: trilho lateral + topo + conteúdo ───────────── */
 .casca { display: grid; grid-template-columns: var(--trilho) minmax(0, 1fr); min-height: 100dvh; }
@@ -338,21 +352,11 @@ legend svg.ic { width: 16px; height: 16px; color: var(--marca); }
   background: var(--fundo-2); border-right: 1px solid var(--borda);
 }
 .marca-app { display: grid; place-items: center; gap: 4px; margin-bottom: 14px; color: var(--marca); text-decoration: none !important; }
-.marca-app .selo { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: var(--selo-fundo); box-shadow: var(--sombra-2), 0 0 0 1px var(--borda); }
-.marca-app .selo svg { width: 36px; height: 42px; }
-/* Logo do menu lateral: PNG de fundo transparente (a cor do menu aparece atrás). Uma versão para cada tema,
-   geradas por ferramentas/gerar-icone.mjs (logo.png = vinho; logo-escuro.png = vinho claro, que aparece no fundo escuro). */
+/* Logo do menu lateral: só o desenho (logo-casa.svg, cores da própria logo: laranja e verde) direto sobre o menu;
+   o nome "OASE" fica escrito embaixo, em texto. Laranja e verde aparecem bem tanto no tema claro quanto no escuro. */
 .selo-png { display: grid; place-items: center; }
-.selo-png img { display: block; width: 44px; height: auto; }
-.selo-png .logo-escuro { display: none; }
-:root[data-tema="escuro"] .selo-png .logo-claro { display: none; }
-:root[data-tema="escuro"] .selo-png .logo-escuro { display: block; }
-/* Símbolo da OASE (cores próprias: vinho sobre azulejo claro, nos dois temas) */
-.logo-oase .lo-torre { fill: var(--selo-fundo); stroke: var(--oase); stroke-width: 4.5; stroke-linejoin: round; }
-.logo-oase .lo-globo { fill: var(--oase-suave); stroke: var(--oase); stroke-width: 4.5; }
-.logo-oase .lo-linha { stroke: var(--oase); stroke-width: 2.5; }
-.logo-oase .lo-cruz { fill: var(--oase); stroke: var(--selo-fundo); stroke-width: 2; }
-.logo-oase .lo-braco { fill: var(--oase); }
+.selo-png img { display: block; width: 52px; height: auto; }
+.logo-oase { display: block; }
 .marca-app b { font: 750 13px/1 var(--f-titulo); letter-spacing: 0.12em; color: var(--texto); }
 /* Com muitos grupos o trilho rola por dentro; o tema e a conta (embaixo) ficam sempre visíveis */
 .trilho nav { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 0 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
@@ -601,7 +605,7 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: 14px; }
 .entrada-arte::after { width: 90vmin; height: 90vmin; left: -30vmin; bottom: -46vmin; border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 0 0 9vmin rgba(255, 255, 255, 0.035), 0 0 0 18vmin rgba(255, 255, 255, 0.025); }
 .entrada-arte .selo-grande { position: relative; display: flex; align-items: center; gap: 14px; }
 .entrada-arte .selo-grande .selo { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 18px; background: var(--selo-fundo); box-shadow: var(--sombra-2); }
-.entrada-arte .selo-grande svg { width: 44px; height: 50px; }
+.entrada-arte .selo-grande img { width: 48px; height: auto; }
 .entrada-arte .selo-grande b { font: 750 20px/1 var(--f-titulo); letter-spacing: 0.14em; }
 .entrada-arte .selo-grande small { display: block; margin-top: 4px; font-size: 13px; opacity: 0.8; letter-spacing: 0.02em; }
 .entrada-arte h1 { position: relative; color: inherit; font-size: clamp(2.2rem, 1.4rem + 3vw, 3.8rem); line-height: 1.02; letter-spacing: -0.04em; max-width: 12ch; }
@@ -1021,7 +1025,7 @@ button.cel-escala:active { transform: scale(0.9); }
 .recibo .assinatura { margin-top: 60px; text-align: center; }
 .recibo .assinatura span { display: inline-block; min-width: 320px; border-top: 1px solid var(--texto); padding-top: 6px; }
 .recibo .selo-recibo { display: flex; align-items: center; gap: 12px; }
-.recibo .selo-recibo svg { width: 40px; height: 48px; }
+.recibo .selo-recibo img { width: 64px; height: auto; }
 @media print { .recibo { border: 0 !important; padding: 0; } }
 
 /* ───────────── configurações ───────────── */
@@ -1088,16 +1092,135 @@ button.cel-escala:active { transform: scale(0.9); }
   :root { --borda: #b9b1a2; --borda-forte: #8f8778; --texto-2: #3a403c; --texto-3: #5a605b; }
 }
 
-/* ───────────── impressão (ficha do residente, listas) ───────────── */
+/* ───────────── documentos impressos (impressao.js) ─────────────
+   O papel não segue o tema da tela: sempre fundo branco, tinta preta, cinzas e linhas finas
+   (sai bem em impressora preto e branco). Medidas em mm/pt porque é papel A4. */
+:root {
+  --doc-tinta: #141414; --doc-texto-2: #3b3b3b; --doc-texto-3: #6a6a6a;
+  --doc-linha: #b9b9b9; --doc-linha-forte: #1c1c1c; --doc-faixa: #ededed; --doc-faixa-2: #f6f6f6;
+  --doc-papel: #ffffff;
+}
+/* No @page as variáveis do :root nem sempre chegam: o cinza do rodapé (= --doc-texto-3) fica escrito aqui. */
+@page {
+  size: A4; margin: 14mm 13mm 15mm;
+  @bottom-left { content: var(--doc-rodape, ""); font: 400 7pt "Onest", sans-serif; color: #6a6a6a; vertical-align: top; padding-top: 3.5mm; }
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 400 7pt "Onest", sans-serif; color: #6a6a6a; vertical-align: top; padding-top: 3.5mm; }
+}
+@page paisagem {
+  size: A4 landscape; margin: 11mm 12mm 13mm;
+  @bottom-left { content: var(--doc-rodape, ""); font: 400 7pt "Onest", sans-serif; color: #6a6a6a; vertical-align: top; padding-top: 3mm; }
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 400 7pt "Onest", sans-serif; color: #6a6a6a; vertical-align: top; padding-top: 3mm; }
+}
+#impressao { display: none; }
 @media print {
-  @page { margin: 14mm; }
+  html.com-documento, html.com-documento body { background: var(--doc-papel) !important; }
+  html.com-documento #app, html.com-documento .toasts, html.com-documento .modal-fundo, html.com-documento .faixa-topo,
+  html.com-documento .menu-flutuante, html.com-documento .bloqueio { display: none !important; }
+  html.com-documento #impressao { display: block; }
+}
+.doc { color: var(--doc-tinta); font: 400 9.5pt/1.42 var(--f-texto); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.doc.paisagem { page: paisagem; }
+.doc * { box-shadow: none !important; }
+/* Cabeçalho timbrado (só na 1ª página; as outras têm o rodapé com o nome do documento e a página) */
+.doc-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; padding-bottom: 2.6mm; border-bottom: 1.4pt solid var(--doc-linha-forte); }
+.doc-timbre { display: flex; align-items: center; gap: 3mm; }
+.doc-timbre { gap: 3.5mm; }
+/* Logo da OASE (casa com a árvore e o casal) ao lado do nome e do CNPJ; as cores vêm do próprio SVG */
+.doc-logo { display: block; flex: none; width: 19mm; }
+.doc-logo svg, .doc-logo img { display: block; width: 100%; height: auto; }
+.doc-timbre .doc-cnpj { margin-top: 0.8mm; font-size: 7.6pt; font-weight: 600; letter-spacing: 0.03em; text-transform: none; color: var(--doc-texto-2); font-variant-numeric: tabular-nums; }
+.doc-timbre b { display: block; font: 700 12.5pt/1.15 var(--f-titulo); letter-spacing: -0.01em; }
+.doc-timbre small { display: block; margin-top: 0.6mm; font-size: 6.8pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--doc-texto-3); }
+.doc-emissao { text-align: right; font-size: 7.2pt; line-height: 1.35; color: var(--doc-texto-3); }
+.doc-emissao b { display: block; font-size: 8.4pt; font-weight: 600; color: var(--doc-tinta); }
+.doc-titulo { margin: 4.5mm 0 4.5mm; }
+.doc-titulo h1 { margin: 0; font: 700 16.5pt/1.15 var(--f-titulo); letter-spacing: -0.015em; }
+.doc-titulo p { margin: 0.8mm 0 0; font-size: 9.8pt; color: var(--doc-texto-2); }
+/* Seções: faixa cinza com o título em caixa alta; o título nunca fica sozinho no pé da página */
+.doc-secao { margin: 0 0 4.5mm; }
+.doc-secao > h2 { margin: 0 0 2mm; padding: 1.3mm 2mm; font: 700 7.8pt/1.2 var(--f-texto); letter-spacing: 0.08em; text-transform: uppercase; background: var(--doc-faixa); border-left: 1mm solid var(--doc-linha-forte); break-after: avoid; }
+.doc-secao.junta { break-inside: avoid; }
+/* Campos (formulário preenchido): caixinhas com rótulo pequeno em cima */
+.doc-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0 0.5pt 0.5pt 0; }
+.doc-campos.c1 { grid-template-columns: minmax(0, 1fr); }
+.doc-campos.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.doc-campos.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.doc-campos > div { min-width: 0; padding: 1.1mm 2mm 1.4mm; margin: 0 -0.5pt -0.5pt 0; border: 0.5pt solid var(--doc-linha); break-inside: avoid; }
+.doc-campos dt { margin-bottom: 0.3mm; font-size: 6.6pt; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--doc-texto-3); }
+.doc-campos dd { margin: 0; font-size: 9.2pt; font-weight: 500; white-space: pre-line; overflow-wrap: anywhere; }
+/* Tabelas */
+.doc-tabela { width: 100%; border-collapse: collapse; font-size: 8.5pt; line-height: 1.35; }
+.doc-tabela thead { display: table-header-group; } /* o cabeçalho da tabela repete em cada página */
+.doc-tabela th { padding: 1.4mm 1.6mm; text-align: left; vertical-align: bottom; font-size: 6.9pt; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  background: var(--doc-faixa); border-top: 0.9pt solid var(--doc-linha-forte); border-bottom: 0.9pt solid var(--doc-linha-forte); }
+.doc-tabela td { padding: 1.3mm 1.6mm; vertical-align: top; border-bottom: 0.5pt solid var(--doc-linha); overflow-wrap: anywhere; }
+.doc-tabela tr { break-inside: avoid; }
+.doc-tabela .dir { text-align: right; font-variant-numeric: tabular-nums; }
+.doc-tabela .centro { text-align: center; }
+.doc-tabela b { font-weight: 650; }
+.doc-tabela small { display: block; margin-top: 0.3mm; font-size: 7.5pt; color: var(--doc-texto-3); }
+.doc-tabela tr.grupo td { padding-top: 1.8mm; font-size: 7.6pt; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; background: var(--doc-faixa-2); border-bottom: 0.7pt solid var(--doc-linha-forte); }
+.doc-tabela tr.apagada td { color: var(--doc-texto-3); }
+.doc-tabela tfoot td { font-weight: 700; border-top: 0.9pt solid var(--doc-linha-forte); border-bottom: 0; }
+.doc-tabela tr.subtotal td { border-top: 0.7pt solid var(--doc-linha-forte); }
+/* Tabela para preencher à mão (folha de remédios, ronda): grade em todas as células e linhas mais altas */
+.doc-tabela.grade td, .doc-tabela.grade th { border: 0.5pt solid var(--doc-linha); }
+.doc-tabela.grade th { border-top-color: var(--doc-linha-forte); border-bottom: 0.9pt solid var(--doc-linha-forte); }
+.doc-tabela.grade td { height: 8.5mm; }
+.doc-tabela.grade td.preencher { background: var(--doc-papel); }
+.doc-tabela.compacta td { padding-top: 0.9mm; padding-bottom: 0.9mm; }
+/* Recibo: duas vias na mesma folha A4, separadas por uma linha de corte */
+.doc-recibo { height: 124mm; padding-top: 2mm; break-inside: avoid; display: flex; flex-direction: column; }
+.doc-recibo-cab { display: flex; justify-content: space-between; align-items: center; margin: 6mm 0 5mm; }
+.doc-recibo-cab h2 { margin: 0; font: 700 18pt/1 var(--f-titulo); letter-spacing: 0.12em; text-transform: uppercase; }
+.doc-recibo-cab small { display: block; margin-top: 1.2mm; font-size: 8pt; color: var(--doc-texto-3); }
+.doc-recibo-valor { padding: 2mm 4mm; font: 700 15pt/1 var(--f-titulo); font-variant-numeric: tabular-nums; border: 1.4pt solid var(--doc-tinta); }
+.doc-recibo p { margin: 0 0 2.5mm; font-size: 10.5pt; line-height: 1.7; text-align: justify; }
+.doc-recibo .doc-recibo-data { margin-top: 3mm; text-align: right; }
+.doc-recibo .doc-assinaturas { margin-top: auto; padding: 0 30mm 2mm; }
+.doc-corte { display: flex; align-items: center; gap: 3mm; margin: 3mm 0; font-size: 6.5pt; letter-spacing: 0.1em; text-transform: uppercase; color: var(--doc-texto-3); }
+.doc-corte::before, .doc-corte::after { content: ""; flex: 1; border-top: 0.8pt dashed var(--doc-texto-3); }
+/* Escala do mês: 31 colunas estreitas */
+.doc-escala { table-layout: fixed; font-size: 7.4pt; }
+.doc-escala th, .doc-escala td { padding: 0.8mm 0.2mm; height: auto; text-align: center; vertical-align: middle; }
+.doc-escala th { font-size: 6.2pt; letter-spacing: 0; line-height: 1.15; }
+.doc-escala .pessoa { width: 40mm; padding-left: 1.6mm; text-align: left; }
+.doc-escala td.fds { background: var(--doc-faixa-2); }
+.doc-escala td.pessoa small { font-size: 6.4pt; }
+.doc-escala tfoot td { font-size: 6.8pt; }
+.doc-quadro { display: inline-block; width: 3mm; height: 3mm; margin-right: 1mm; vertical-align: -0.4mm; border: 0.8pt solid var(--doc-tinta); }
+/* Peças pequenas */
+.doc-vazio { color: var(--doc-texto-3); }
+.doc-nw { white-space: nowrap; }
+.doc-nada { margin: 0; padding: 2mm 0; color: var(--doc-texto-3); font-style: italic; }
+.doc-quebras { white-space: pre-line; }
+.doc-nota { margin: 1.6mm 0 0; font-size: 7.6pt; line-height: 1.4; color: var(--doc-texto-3); }
+.doc-marca { display: inline-block; padding: 0 1mm; font-size: 6.6pt; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; border: 0.7pt solid var(--doc-tinta); border-radius: 0.6mm; }
+.doc-alerta { margin: 0 0 4mm; padding: 2mm 3mm; font-size: 9.4pt; border: 1.4pt solid var(--doc-tinta); break-inside: avoid; }
+.doc-alerta b { letter-spacing: 0.04em; text-transform: uppercase; }
+.doc-numeros { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; margin: 0 0 4.5mm; padding: 0 0.5pt 0 0; }
+.doc-numeros > div { padding: 1.6mm 2.4mm 2mm; margin-right: -0.5pt; border: 0.5pt solid var(--doc-linha); border-top: 1.4pt solid var(--doc-linha-forte); }
+.doc-numeros small { display: block; font-size: 6.8pt; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--doc-texto-3); }
+.doc-numeros b { display: block; margin-top: 0.6mm; font: 700 13pt/1.1 var(--f-titulo); font-variant-numeric: tabular-nums; }
+.doc-assinaturas { display: flex; gap: 14mm; margin-top: 16mm; break-inside: avoid; }
+.doc-assinaturas > div { flex: 1; text-align: center; }
+.doc-assinaturas span { display: block; margin-bottom: 1.2mm; border-top: 0.8pt solid var(--doc-tinta); }
+.doc-assinaturas small { font-size: 8pt; color: var(--doc-texto-2); }
+.doc-colunas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 6mm; }
+.doc-foto { width: 26mm; height: 26mm; object-fit: cover; border: 0.5pt solid var(--doc-linha); flex: none; }
+.doc-ident { display: flex; gap: 4mm; align-items: stretch; margin-bottom: 4.5mm; }
+.doc-ident > .doc-campos { flex: 1; }
+
+/* ───────────── impressão de tela sem documento próprio (reserva) ───────────── */
+@media print {
   :root { --fundo: #fff; --superficie: #fff; --superficie-2: #fff; --superficie-3: #f3f3f3; --borda: #cfcfcf; --texto: #000; --texto-2: #333; --texto-3: #555; }
   body { background: #fff; font-size: 12px; }
   .trilho, .topo, .toasts, .nao-imprimir, .barra-ferramentas, .voltar, .acoes, .btn, .btn-icone, .faixa-topo, #rascunhos { display: none !important; }
   .casca { display: block; }
   .conteudo { padding: 0; max-width: none; }
   .so-impressao { display: block; }
-  .cartao, .caixa-contato, .perfil, .res-cartao { box-shadow: none !important; break-inside: avoid; }
+  .cartao { box-shadow: none !important; }
+  .caixa-contato, .perfil, .res-cartao { box-shadow: none !important; break-inside: avoid; }
   .cascata > * { animation: none !important; }
   .cabecalho-impressao { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 14px; }
   .cabecalho-impressao b { font: 700 14px var(--f-titulo); }
